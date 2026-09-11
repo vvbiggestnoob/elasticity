@@ -1,0 +1,25 @@
+{
+  "t_current": 0.02,
+  "dt": 0.01,
+  "t_new": 0.03,
+  "alpha": 0.3412905277253556,
+  "v_target": 0.4,
+  "phi_in": "E:\\workspace\\paper elastic\\start\\weights_loop_smoke\\phi_iter2.pt",
+  "phi_out": "E:\\workspace\\paper elastic\\start\\weights_loop_smoke\\phi_iter3.pt",
+  "seed": 20260912,
+  "wall_time_s": 4.5,
+  "residual_rms_train": 0.2799755663312357,
+  "residual_rms_val": 0.28243892030413315,
+  "area_before": 0.6779762141142752,
+  "area_after": 0.5768487283557814,
+  "omega2_before": 0.1799094945551433,
+  "omega2_after_rayleigh_frozen_mech": 0.1454049641456953,
+  "F_before": -0.0667056852840478,
+  "F_after": -0.09958553732259716,
+  "grad_norm_near_zero_level": {
+    "mean": 0.462350703976043,
+    "min": 0.01173042068128059,
+    "max": 1.4616958012531973,
+    "n": 4391
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "t_current": 0.35000000000000003,
+  "dt": 0.05,
+  "t_new": 0.4,
+  "alpha": 1.0,
+  "v_target": 0.4,
+  "phi_in": "e:\\workspace\\paper elastic\\start\\weights\\phi_iter7.pt",
+  "phi_out": "e:\\workspace\\paper elastic\\start\\weights\\phi_iter8.pt",
+  "seed": 20260917,
+  "wall_time_s": 396.9,
+  "residual_rms_train": 0.01188270856951168,
+  "residual_rms_val": 0.012679203823659582,
+  "area_before": 0.7050384376949195,
+  "area_after": 0.6918400319840332,
+  "omega2_before": 0.22922101202662615,
+  "omega2_after_rayleigh_frozen_mech": 0.226510383338475,
+  "F_before": -0.18269678779094753,
+  "F_after": -0.18392508120425424,
+  "grad_norm_near_zero_level": {
+    "mean": 0.7020899156422126,
+    "min": 0.12663957906766238,
+    "max": 1.2699358060311596,
+    "n": 11788
+  },
+  "omega2_fem_after": 0.22084473890748504,
+  "area_fem_after": 0.6918701747767294,
+  "fem_vs_rayleigh_rel": 0.025654423370091606
+}
