@@ -1,0 +1,248 @@
+exp01_bridge：角部硬非设计域边长 = 0.08，n_iter = 80，dt = 0.005（不强制对称）| mech 1200/50，hjb 1500/100
+========================================================================
+交替循环：n_iter = 80，dt = 0.005，总伪时间 T = 0.4，C = 0.4
+罚参数：Step D 自适应（第 1 步 α = 1.0，之后 p = min(τ·ω²/|ΔV|, p_cap)，τ = 1.1）
+p_cap 固定 = 0.875
+HJB 完整步：Adam 1500 + L-BFGS 100 块 | 廉价步：Adam 1000 + L-BFGS 20 块 | 每 1 步一次完整校正
+力学重解：Adam 1200 + L-BFGS 50 块（热启动，max|Δφ| < 0 时跳步）
+HJB 模块：hjb_step_eik | FEM 对拍：True
+========================================================================
+
+########################################################################
+### 迭代 1/80（完整校正步）：t ∈ [0.0, 0.005] | α = 1 | p_cap = 0.875
+########################################################################
+========================================================================
+HJB 单次演化：t ∈ [0.0, 0.005]（dt = 0.005），α = 1.0（固定），C = 0.4
+========================================================================
+已加载冻结力学网络：E:\workspace\paper elastic\exp01_bridge\weights/*_init.pt
+已加载 SDF 网络：E:\workspace\paper elastic\exp01_bridge\weights\phi_init.pt（phi_ref 冻结锚定初始条件，phi 热启动训练）
+当前几何：ω²(Rayleigh) = 0.225138 | ∫S dx = 0.771543 | F = -0.156116
+V_n 场（20000 池点）：mean = -0.3765 | min = -25.4867 | max = +0.4034
+点集：Adam 池 20000+10000+4000(带)+1000(角) | L-BFGS 8192+4096+1024(带)+256(角) | 验证 4096+2048+512(带)+128(角) | 角部硬非设计域 0.08 见方（冻结）
+[Adam] 开始：1500 步，lr 0.0005→5e-05（余弦，退火上限 500 步，之后保持 5e-05），每步 batch 4000+1000+512(角冻)
+[Adam] step     0 | total 3.8574e+00 | r 3.857e+00 init 0.000e+00 anchor 2.521e-05 eik 3.996e-02 | lr 5.00e-04 | 0s
+[Adam] step    50 | total 2.8505e-02 | r 2.549e-02 init 2.062e-03 anchor 2.582e-03 eik 3.704e-01 | lr 4.89e-04 | 1s
+[Adam] step   100 | total 1.0246e-02 | r 7.509e-03 init 2.111e-03 anchor 2.883e-03 eik 4.142e-01 | lr 4.56e-04 | 2s
+[Adam] step   150 | total 8.7631e-03 | r 6.032e-03 init 2.427e-03 anchor 2.966e-03 eik 4.328e-01 | lr 4.06e-04 | 4s
+[Adam] step   200 | total 7.3871e-03 | r 4.653e-03 init 2.308e-03 anchor 3.018e-03 eik 4.636e-01 | lr 3.43e-04 | 5s
+[Adam] step   250 | total 6.7338e-03 | r 3.916e-03 init 2.477e-03 anchor 3.086e-03 eik 4.705e-01 | lr 2.74e-04 | 6s
+[Adam] step   300 | total 5.8816e-03 | r 3.164e-03 init 2.693e-03 anchor 3.017e-03 eik 4.727e-01 | lr 2.04e-04 | 7s
+[Adam] step   350 | total 5.9326e-03 | r 3.273e-03 init 2.275e-03 anchor 2.943e-03 eik 4.900e-01 | lr 1.42e-04 | 8s
+[Adam] step   400 | total 5.9250e-03 | r 3.255e-03 init 2.472e-03 anchor 2.930e-03 eik 4.825e-01 | lr 9.21e-05 | 10s
+[Adam] step   450 | total 5.8933e-03 | r 3.112e-03 init 2.768e-03 anchor 2.932e-03 eik 4.880e-01 | lr 6.06e-05 | 11s
+[Adam] step   500 | total 5.8187e-03 | r 3.023e-03 init 2.791e-03 anchor 3.036e-03 eik 4.884e-01 | lr 5.00e-05 | 12s
+[Adam] step   550 | total 5.4656e-03 | r 2.799e-03 init 2.830e-03 anchor 2.869e-03 eik 4.846e-01 | lr 5.00e-05 | 14s
+[Adam] step   600 | total 5.5377e-03 | r 2.858e-03 init 2.614e-03 anchor 2.868e-03 eik 4.829e-01 | lr 5.00e-05 | 15s
+[Adam] step   650 | total 5.3398e-03 | r 2.639e-03 init 2.693e-03 anchor 2.909e-03 eik 4.929e-01 | lr 5.00e-05 | 16s
+[Adam] step   700 | total 5.4013e-03 | r 2.668e-03 init 2.643e-03 anchor 2.999e-03 eik 4.976e-01 | lr 5.00e-05 | 18s
+[Adam] step   750 | total 5.4704e-03 | r 2.726e-03 init 2.707e-03 anchor 2.950e-03 eik 4.894e-01 | lr 5.00e-05 | 19s
+[Adam] step   800 | total 5.2875e-03 | r 2.618e-03 init 3.069e-03 anchor 2.840e-03 eik 5.001e-01 | lr 5.00e-05 | 21s
+[Adam] step   850 | total 5.0662e-03 | r 2.410e-03 init 2.284e-03 anchor 2.990e-03 eik 5.032e-01 | lr 5.00e-05 | 22s
+[Adam] step   900 | total 5.1628e-03 | r 2.446e-03 init 2.872e-03 anchor 2.936e-03 eik 4.998e-01 | lr 5.00e-05 | 23s
+[Adam] step   950 | total 5.1168e-03 | r 2.403e-03 init 3.008e-03 anchor 2.921e-03 eik 5.034e-01 | lr 5.00e-05 | 25s
+[Adam] step  1000 | total 5.2302e-03 | r 2.511e-03 init 2.383e-03 anchor 2.945e-03 eik 5.054e-01 | lr 5.00e-05 | 26s
+[Adam] step  1050 | total 5.1903e-03 | r 2.420e-03 init 2.972e-03 anchor 2.948e-03 eik 5.053e-01 | lr 5.00e-05 | 27s
+[Adam] step  1100 | total 4.9207e-03 | r 2.233e-03 init 2.766e-03 anchor 2.907e-03 eik 5.078e-01 | lr 5.00e-05 | 29s
+[Adam] step  1150 | total 5.1008e-03 | r 2.264e-03 init 2.912e-03 anchor 2.946e-03 eik 5.056e-01 | lr 5.00e-05 | 30s
+[Adam] 停滞检测：300 步内 total 相对改善 -6.84e-03 < 0.005，提前切换到 L-BFGS
+[Adam] 结束，用时 30s
+[L-BFGS] 开始：≤100 块 × 70 次，强 Wolfe，固定点集 8192+4096
+[L-BFGS] block   0 | train 3.995691e-03 | val 4.045874e-03 | rel_improve       — *best | 5s
+[L-BFGS] block   1 | train 3.589150e-03 | val 3.604837e-03 | rel_improve +1.09e-01 *best | 9s
+[L-BFGS] block   2 | train 3.366029e-03 | val 3.364214e-03 | rel_improve +6.68e-02 *best | 14s
+[L-BFGS] block   3 | train 3.155189e-03 | val 3.163829e-03 | rel_improve +5.96e-02 *best | 19s
+[L-BFGS] block   4 | train 3.049070e-03 | val 3.064878e-03 | rel_improve +3.13e-02 *best | 24s
+[L-BFGS] block   5 | train 2.922522e-03 | val 2.944670e-03 | rel_improve +3.92e-02 *best | 29s
+[L-BFGS] block   6 | train 2.803759e-03 | val 2.841326e-03 | rel_improve +3.51e-02 *best | 33s
+[L-BFGS] block   7 | train 2.701991e-03 | val 2.777274e-03 | rel_improve +2.25e-02 *best | 39s
+[L-BFGS] block   8 | train 2.635647e-03 | val 2.720383e-03 | rel_improve +2.05e-02 *best | 44s
+[L-BFGS] block   9 | train 2.560235e-03 | val 2.623086e-03 | rel_improve +3.58e-02 *best | 49s
+[L-BFGS] block  10 | train 2.493078e-03 | val 2.569199e-03 | rel_improve +2.05e-02 *best | 54s
+[L-BFGS] block  11 | train 2.417814e-03 | val 2.518060e-03 | rel_improve +1.99e-02 *best | 58s
+[L-BFGS] block  12 | train 2.366327e-03 | val 2.473345e-03 | rel_improve +1.78e-02 *best | 64s
+[L-BFGS] block  13 | train 2.317403e-03 | val 2.417768e-03 | rel_improve +2.25e-02 *best | 69s
+[L-BFGS] block  14 | train 2.277541e-03 | val 2.371920e-03 | rel_improve +1.90e-02 *best | 74s
+[L-BFGS] block  15 | train 2.236143e-03 | val 2.337341e-03 | rel_improve +1.46e-02 *best | 79s
+[L-BFGS] block  16 | train 2.209551e-03 | val 2.316664e-03 | rel_improve +8.85e-03 *best | 84s
+[L-BFGS] block  17 | train 2.158163e-03 | val 2.253578e-03 | rel_improve +2.72e-02 *best | 89s
+[L-BFGS] block  18 | train 2.118213e-03 | val 2.186297e-03 | rel_improve +2.99e-02 *best | 94s
+[L-BFGS] block  19 | train 2.083196e-03 | val 2.162043e-03 | rel_improve +1.11e-02 *best | 98s
+[L-BFGS] block  20 | train 2.042759e-03 | val 2.117404e-03 | rel_improve +2.06e-02 *best | 104s
+[L-BFGS] block  21 | train 2.007621e-03 | val 2.050621e-03 | rel_improve +3.15e-02 *best | 109s
+[L-BFGS] block  22 | train 1.980474e-03 | val 2.027532e-03 | rel_improve +1.13e-02 *best | 114s
+[L-BFGS] block  23 | train 1.941781e-03 | val 1.978035e-03 | rel_improve +2.44e-02 *best | 119s
+[L-BFGS] block  24 | train 1.907347e-03 | val 1.953442e-03 | rel_improve +1.24e-02 *best | 124s
+[L-BFGS] block  25 | train 1.874196e-03 | val 1.920650e-03 | rel_improve +1.68e-02 *best | 130s
+[L-BFGS] block  26 | train 1.842168e-03 | val 1.876647e-03 | rel_improve +2.29e-02 *best | 135s
+[L-BFGS] block  27 | train 1.798689e-03 | val 1.825440e-03 | rel_improve +2.73e-02 *best | 140s
+[L-BFGS] block  28 | train 1.763720e-03 | val 1.796185e-03 | rel_improve +1.60e-02 *best | 145s
+[L-BFGS] block  29 | train 1.718100e-03 | val 1.743325e-03 | rel_improve +2.94e-02 *best | 150s
+[L-BFGS] block  30 | train 1.693162e-03 | val 1.720775e-03 | rel_improve +1.29e-02 *best | 155s
+[L-BFGS] block  31 | train 1.674851e-03 | val 1.704641e-03 | rel_improve +9.38e-03 *best | 160s
+[L-BFGS] block  32 | train 1.652991e-03 | val 1.695523e-03 | rel_improve +5.35e-03 *best | 166s
+[L-BFGS] block  33 | train 1.630722e-03 | val 1.672549e-03 | rel_improve +1.36e-02 *best | 171s
+[L-BFGS] block  34 | train 1.610387e-03 | val 1.643327e-03 | rel_improve +1.75e-02 *best | 177s
+[L-BFGS] block  35 | train 1.591077e-03 | val 1.626490e-03 | rel_improve +1.02e-02 *best | 182s
+[L-BFGS] block  36 | train 1.574532e-03 | val 1.614063e-03 | rel_improve +7.64e-03 *best | 187s
+[L-BFGS] block  37 | train 1.559595e-03 | val 1.592950e-03 | rel_improve +1.31e-02 *best | 193s
+[L-BFGS] block  38 | train 1.548258e-03 | val 1.581491e-03 | rel_improve +7.19e-03 *best | 198s
+[L-BFGS] block  39 | train 1.531107e-03 | val 1.570900e-03 | rel_improve +6.70e-03 *best | 204s
+[L-BFGS] block  40 | train 1.517098e-03 | val 1.557500e-03 | rel_improve +8.53e-03 *best | 209s
+[L-BFGS] block  41 | train 1.500764e-03 | val 1.547878e-03 | rel_improve +6.18e-03 *best | 214s
+[L-BFGS] block  42 | train 1.489449e-03 | val 1.535521e-03 | rel_improve +7.98e-03 *best | 220s
+[L-BFGS] block  43 | train 1.475224e-03 | val 1.522612e-03 | rel_improve +8.41e-03 *best | 225s
+[L-BFGS] block  44 | train 1.454845e-03 | val 1.494853e-03 | rel_improve +1.82e-02 *best | 230s
+[L-BFGS] block  45 | train 1.441509e-03 | val 1.481387e-03 | rel_improve +9.01e-03 *best | 235s
+[L-BFGS] block  46 | train 1.424827e-03 | val 1.458908e-03 | rel_improve +1.52e-02 *best | 241s
+[L-BFGS] block  47 | train 1.414343e-03 | val 1.448942e-03 | rel_improve +6.83e-03 *best | 246s
+[L-BFGS] block  48 | train 1.403301e-03 | val 1.433580e-03 | rel_improve +1.06e-02 *best | 251s
+[L-BFGS] block  49 | train 1.392563e-03 | val 1.420347e-03 | rel_improve +9.23e-03 *best | 257s
+[L-BFGS] block  50 | train 1.380394e-03 | val 1.410496e-03 | rel_improve +6.94e-03 *best | 262s
+[L-BFGS] block  51 | train 1.372518e-03 | val 1.403500e-03 | rel_improve +4.96e-03 *best | 267s
+[L-BFGS] 早停：连续 5 块 train 损失相对下降 < 0.01
+[L-BFGS] 结束，保留最终权重（不回滚；best val = 1.403500e-03 仅供参考），用时 267s
+[保存] 演化后 SDF 网络权重 -> E:\workspace\paper elastic\exp01_bridge\weights\phi_iter1.pt
+
+===== 诊断（HJB 演化后自检） =====
+HJB 残差 RMS：train = 2.678e-02 | val = 2.686e-02
+面积 ∫S dx：演化前 0.771543 → 演化后 0.784133 （目标 C = 0.4，偏差 +0.3715 → +0.3841）
+ω²（PINN Rayleigh 商）：演化前 0.225138 → 演化后 0.237060（冻结力学近似）
+目标函数 F：演化前 -0.156116 → 演化后 -0.163281 （V_n 取最速下降方向，F 应下降）
+零水平集附近（|φ|≤0.05，7431 点）|∇φ|：mean = 0.6674 | min = 0.3545 | max = 1.2054（距离函数应 ≈ 1，偏离多则需重初始化）
+[HJB 演化后 (t=0.005)] 网格 160×50（8211 节点 / 16422 自由度，固支 204 自由度）| S∈[0.1535,1.0000] | ∫S dΩ = 0.784252 | ω²_1 = 0.23114449 | 用时 0.7s
+FEM 对拍（演化后几何，160×50）：ω²_FEM = 0.231144 | ∫S = 0.784252 | 与 PINN Rayleigh 相对偏差 2.56e-02
+[保存] 演化状态与诊断记录 -> E:\workspace\paper elastic\exp01_bridge\weights\hjb_state_iter1.json
+[完成] HJB 单次演化结束，用时 303s。图片输出目录：E:\workspace\paper elastic\exp01_bridge\loop_figures\iter001_hjb
+[Step D] ΔV = +0.3841，ω² = 0.2311 → 下一步 α = 0.5803（罚压力 p = 0.6619，p_cap = 0.875）
+[力学重解] max|Δφ| = 2.31e-03，ω² 锚点 = 0.231144
+已加载冻结 SDF：E:\workspace\paper elastic\exp01_bridge\weights\phi_iter1.pt
+力学网络：['u_x', 'u_y', 'sigma_xx', 'sigma_xy', 'sigma_yy']，总参数 63685
+力学网络热启动：E:\workspace\paper elastic\exp01_bridge\weights/*_init.pt
+Adam 点池：interior 20000，block 3000，dir/neu 各 2×2000
+[Adam] 开始：1200 步，lr 0.001→1e-05（余弦），前 0 步关闭 L_ray
+[Adam] step     0 | total 3.8954e+01 | pde 7.673e+00 cons 2.548e-03 blk 3.214e+00 | dir 1.134e-04 neu 3.756e-04 norm 1.343e-02 ray 2.601e-02 | m 0.8841 R 0.2684 | lr 1.00e-03 | 0s
+[Adam] step   100 | total 2.7453e+00 | pde 3.844e-02 cons 5.519e-02 blk 2.354e+00 | dir 2.623e-03 neu 1.863e-03 norm 9.098e-02 ray 2.649e-01 | m 0.6984 R 0.3501 | lr 9.83e-04 | 15s
+[Adam] step   200 | total 9.7351e-01 | pde 7.186e-02 cons 1.906e-02 blk 1.577e+00 | dir 1.918e-03 neu 1.427e-03 norm 3.719e-02 ray 8.997e-03 | m 0.8072 R 0.2531 | lr 9.33e-04 | 30s
+[Adam] step   300 | total 4.1069e-01 | pde 3.234e-02 cons 2.816e-02 blk 1.214e+00 | dir 2.253e-03 neu 2.908e-03 norm 9.115e-04 ray 1.298e-02 | m 1.0302 R 0.2048 | lr 8.54e-04 | 45s
+[Adam] step   400 | total 5.4576e-01 | pde 5.329e-02 cons 2.935e-02 blk 1.570e+00 | dir 2.039e-03 neu 1.812e-03 norm 1.834e-03 ray 1.049e-02 | m 0.9572 R 0.2075 | lr 7.51e-04 | 60s
+[Adam] step   500 | total 8.2386e-01 | pde 6.067e-02 cons 7.870e-02 blk 1.534e+00 | dir 1.873e-02 neu 1.593e-03 norm 4.568e-03 ray 1.077e-02 | m 0.9324 R 0.2551 | lr 6.32e-04 | 75s
+[Adam] step   600 | total 2.3366e-01 | pde 1.174e-02 cons 1.686e-02 blk 9.641e-01 | dir 1.017e-03 neu 1.577e-03 norm 1.064e-03 ray 7.860e-03 | m 0.9674 R 0.2107 | lr 5.04e-04 | 89s
+[Adam] step   700 | total 5.8874e-01 | pde 4.655e-02 cons 1.812e-02 blk 3.206e+00 | dir 5.843e-04 neu 1.336e-03 norm 7.728e-04 ray 4.771e-04 | m 0.9722 R 0.2261 | lr 3.76e-04 | 104s
+[Adam] step   800 | total 7.4441e-01 | pde 2.544e-02 cons 1.617e-02 blk 1.070e+00 | dir 5.917e-04 neu 1.373e-03 norm 3.229e-02 ray 3.277e-02 | m 1.1797 R 0.1893 | lr 2.56e-04 | 119s
+[Adam] step   900 | total 5.6211e-01 | pde 1.703e-02 cons 1.817e-02 blk 8.582e-01 | dir 1.932e-04 neu 1.067e-03 norm 2.482e-02 ray 2.436e-02 | m 1.1575 R 0.1951 | lr 1.54e-04 | 134s
+[Adam] step  1000 | total 3.2031e-01 | pde 1.664e-02 cons 1.802e-02 blk 1.193e+00 | dir 5.935e-04 neu 1.706e-03 norm 7.516e-03 ray 3.390e-03 | m 0.9133 R 0.2446 | lr 7.57e-05 | 149s
+[Adam] step  1100 | total 3.1674e-01 | pde 3.807e-02 cons 1.792e-02 blk 9.295e-01 | dir 2.370e-04 neu 1.201e-03 norm 1.196e-03 ray 7.354e-07 | m 0.9654 R 0.2309 | lr 2.65e-05 | 164s
+[Adam] step  1199 | total 7.2735e-01 | pde 2.839e-02 cons 1.755e-02 blk 5.163e-01 | dir 6.883e-04 neu 1.336e-03 norm 3.624e-02 ray 2.912e-02 | m 0.8096 R 0.2706 | lr 1.00e-05 | 179s
+[Adam] 结束，用时 179s
+[L-BFGS] 开始：≤50 块 × 70 次，强 Wolfe，固定点集 8000+1000+2×300
+[L-BFGS] block   0 | train 1.517967e-01 | val 2.446664e+00 | rel_improve +nan *best | 22s
+[L-BFGS] block   1 | train 7.967098e-02 | val 2.315467e+00 | rel_improve +5.36e-02 *best | 43s
+[L-BFGS] block   2 | train 4.742293e-02 | val 1.971690e+00 | rel_improve +1.48e-01 *best | 65s
+[L-BFGS] block   3 | train 3.224583e-02 | val 2.129113e+00 | rel_improve -7.98e-02 | 86s
+[L-BFGS] block   4 | train 2.528543e-02 | val 2.139277e+00 | rel_improve -8.50e-02 | 109s
+[L-BFGS] block   5 | train 1.975115e-02 | val 2.095783e+00 | rel_improve -6.29e-02 | 131s
+[L-BFGS] block   6 | train 1.644725e-02 | val 2.189022e+00 | rel_improve -1.10e-01 | 152s
+[L-BFGS] block   7 | train 1.408303e-02 | val 2.259351e+00 | rel_improve -1.46e-01 | 174s
+[L-BFGS] block   8 | train 1.207956e-02 | val 2.428243e+00 | rel_improve -2.32e-01 | 196s
+[L-BFGS] block   9 | train 1.078077e-02 | val 2.482871e+00 | rel_improve -2.59e-01 | 218s
+[L-BFGS] block  10 | train 9.797238e-03 | val 2.553657e+00 | rel_improve -2.95e-01 | 240s
+[L-BFGS] block  11 | train 9.148940e-03 | val 2.642978e+00 | rel_improve -3.40e-01 | 262s
+[L-BFGS] block  12 | train 8.629467e-03 | val 2.695389e+00 | rel_improve -3.67e-01 | 284s
+[L-BFGS] block  13 | train 8.198090e-03 | val 2.760675e+00 | rel_improve -4.00e-01 | 305s
+[L-BFGS] block  14 | train 7.846039e-03 | val 2.865303e+00 | rel_improve -4.53e-01 | 328s
+[L-BFGS] block  15 | train 7.555080e-03 | val 3.028075e+00 | rel_improve -5.36e-01 | 350s
+[L-BFGS] block  16 | train 7.246038e-03 | val 3.173185e+00 | rel_improve -6.09e-01 | 372s
+[L-BFGS] block  17 | train 7.018678e-03 | val 3.284478e+00 | rel_improve -6.66e-01 | 395s
+[L-BFGS] block  18 | train 6.811423e-03 | val 3.458379e+00 | rel_improve -7.54e-01 | 417s
+[L-BFGS] block  19 | train 6.617200e-03 | val 3.569934e+00 | rel_improve -8.11e-01 | 440s
+[L-BFGS] block  20 | train 6.443689e-03 | val 3.656238e+00 | rel_improve -8.54e-01 | 462s
+[L-BFGS] block  21 | train 6.262800e-03 | val 3.753285e+00 | rel_improve -9.04e-01 | 484s
+[L-BFGS] block  22 | train 6.101874e-03 | val 3.892662e+00 | rel_improve -9.74e-01 | 506s
+[L-BFGS] block  23 | train 5.965849e-03 | val 4.004012e+00 | rel_improve -1.03e+00 | 527s
+[L-BFGS] block  24 | train 5.851402e-03 | val 4.109124e+00 | rel_improve -1.08e+00 | 548s
+[L-BFGS] block  25 | train 5.722931e-03 | val 4.211031e+00 | rel_improve -1.14e+00 | 570s
+[L-BFGS] block  26 | train 5.611672e-03 | val 4.384149e+00 | rel_improve -1.22e+00 | 593s
+[L-BFGS] block  27 | train 5.505997e-03 | val 4.422926e+00 | rel_improve -1.24e+00 | 615s
+[L-BFGS] block  28 | train 5.405310e-03 | val 4.505503e+00 | rel_improve -1.29e+00 | 637s
+[L-BFGS] block  29 | train 5.302098e-03 | val 4.554431e+00 | rel_improve -1.31e+00 | 659s
+[L-BFGS] block  30 | train 5.197152e-03 | val 4.539551e+00 | rel_improve -1.30e+00 | 682s
+[L-BFGS] block  31 | train 5.101927e-03 | val 4.529322e+00 | rel_improve -1.30e+00 | 705s
+[L-BFGS] block  32 | train 5.007490e-03 | val 4.479275e+00 | rel_improve -1.27e+00 | 728s
+[L-BFGS] block  33 | train 4.920568e-03 | val 4.418702e+00 | rel_improve -1.24e+00 | 751s
+[L-BFGS] block  34 | train 4.847871e-03 | val 4.377306e+00 | rel_improve -1.22e+00 | 773s
+[L-BFGS] block  35 | train 4.775909e-03 | val 4.316339e+00 | rel_improve -1.19e+00 | 795s
+[L-BFGS] block  36 | train 4.703772e-03 | val 4.278999e+00 | rel_improve -1.17e+00 | 819s
+[L-BFGS] block  37 | train 4.634718e-03 | val 4.267757e+00 | rel_improve -1.16e+00 | 840s
+[L-BFGS] block  38 | train 4.579196e-03 | val 4.282500e+00 | rel_improve -1.17e+00 | 863s
+[L-BFGS] block  39 | train 4.514184e-03 | val 4.290023e+00 | rel_improve -1.18e+00 | 886s
+[L-BFGS] block  40 | train 4.461939e-03 | val 4.331141e+00 | rel_improve -1.20e+00 | 908s
+[L-BFGS] block  41 | train 4.414403e-03 | val 4.332322e+00 | rel_improve -1.20e+00 | 930s
+[L-BFGS] block  42 | train 4.376166e-03 | val 4.321371e+00 | rel_improve -1.19e+00 | 952s
+[L-BFGS] block  43 | train 4.328922e-03 | val 4.370850e+00 | rel_improve -1.22e+00 | 975s
+[L-BFGS] block  44 | train 4.284112e-03 | val 4.413680e+00 | rel_improve -1.24e+00 | 998s
+[L-BFGS] block  45 | train 4.237185e-03 | val 4.478422e+00 | rel_improve -1.27e+00 | 1020s
+[L-BFGS] block  46 | train 4.193365e-03 | val 4.548169e+00 | rel_improve -1.31e+00 | 1041s
+[L-BFGS] block  47 | train 4.149726e-03 | val 4.649770e+00 | rel_improve -1.36e+00 | 1064s
+[L-BFGS] block  48 | train 4.109151e-03 | val 4.715356e+00 | rel_improve -1.39e+00 | 1086s
+[L-BFGS] block  49 | train 4.070179e-03 | val 4.728970e+00 | rel_improve -1.40e+00 | 1112s
+[L-BFGS] 结束，保留最终权重（不回滚；best val = 1.971690e+00 仅供参考），用时 1112s
+已保存力学网络权重：
+  E:\workspace\paper elastic\exp01_bridge\weights\u_x_iter1.pt
+  E:\workspace\paper elastic\exp01_bridge\weights\u_y_iter1.pt
+  E:\workspace\paper elastic\exp01_bridge\weights\sigma_xx_iter1.pt
+  E:\workspace\paper elastic\exp01_bridge\weights\sigma_xy_iter1.pt
+  E:\workspace\paper elastic\exp01_bridge\weights\sigma_yy_iter1.pt
+
+===== 诊断（训练后自检） =====
+Rayleigh 商 R          = 0.237110
+FEM 锚点 ω²_FEM        = 0.231144
+相对误差 |R−ω²|/ω²     = 2.581e-02
+质量积分 m（目标 1）   = 0.973382
+PDE 残差 RMS（S 加权） = 1.688e+00
+Dirichlet 残差 RMS     = 8.225e-03
+Neumann 残差 RMS       = 1.855e-02
+（与 FEM 模态的 MAC / 加权 L2 需 FEM 模态数据，当前阶段暂无，留待对拍。）
+力学初始化完成。
+[迭代 1 完成]（完整校正步）F -0.156116 → -0.163281 | 面积 → 0.7841（C=0.4）| ω²锚点 = 0.231144 | HJB 303s + 力学 1292s | 累计 1596s
+
+########################################################################
+### 迭代 2/80（完整校正步）：t ∈ [0.005, 0.01] | α = 0.5803 | p_cap = 0.875
+########################################################################
+========================================================================
+HJB 单次演化：t ∈ [0.005, 0.01]（dt = 0.005），α = 0.5803458030616226（固定），C = 0.4
+========================================================================
+已加载冻结力学网络：E:\workspace\paper elastic\exp01_bridge\weights/*_iter1.pt
+已加载 SDF 网络：E:\workspace\paper elastic\exp01_bridge\weights\phi_iter1.pt（phi_ref 冻结锚定初始条件，phi 热启动训练）
+当前几何：ω²(Rayleigh) = 0.233775 | ∫S dx = 0.784132 | F = -0.106646
+V_n 场（20000 池点）：mean = -0.6629 | min = -26.3410 | max = +0.2951
+点集：Adam 池 20000+10000+4000(带)+1000(角) | L-BFGS 8192+4096+1024(带)+256(角) | 验证 4096+2048+512(带)+128(角) | 角部硬非设计域 0.08 见方（冻结）
+[Adam] 开始：1500 步，lr 0.0005→5e-05（余弦，退火上限 500 步，之后保持 5e-05），每步 batch 4000+1000+512(角冻)
+[Adam] step     0 | total 5.4500e-02 | r 5.434e-02 init 0.000e+00 anchor 4.563e-07 eik 1.620e-01 | lr 5.00e-04 | 0s
+[Adam] step    50 | total 1.5392e-02 | r 1.474e-02 init 1.114e-04 anchor 1.480e-04 eik 1.955e-01 | lr 4.89e-04 | 1s
+[Adam] step   100 | total 5.4907e-03 | r 5.054e-03 init 1.049e-04 anchor 2.414e-04 eik 2.197e-01 | lr 4.56e-04 | 3s
+[Adam] step   150 | total 4.5276e-03 | r 4.029e-03 init 1.305e-04 anchor 3.383e-04 eik 2.249e-01 | lr 4.06e-04 | 4s
+[Adam] step   200 | total 3.9579e-03 | r 3.419e-03 init 1.412e-04 anchor 4.126e-04 eik 2.366e-01 | lr 3.43e-04 | 6s
+[Adam] step   250 | total 3.4732e-03 | r 2.947e-03 init 1.532e-04 anchor 4.026e-04 eik 2.295e-01 | lr 2.74e-04 | 7s
+[Adam] step   300 | total 3.2065e-03 | r 2.678e-03 init 1.623e-04 anchor 4.011e-04 eik 2.376e-01 | lr 2.04e-04 | 9s
+[Adam] step   350 | total 2.9681e-03 | r 2.439e-03 init 1.754e-04 anchor 3.837e-04 eik 2.380e-01 | lr 1.42e-04 | 10s
+[Adam] step   400 | total 2.9698e-03 | r 2.436e-03 init 1.677e-04 anchor 3.965e-04 eik 2.386e-01 | lr 9.21e-05 | 11s
+[Adam] step   450 | total 2.9774e-03 | r 2.449e-03 init 1.751e-04 anchor 3.971e-04 eik 2.466e-01 | lr 6.06e-05 | 13s
+[Adam] step   500 | total 2.9300e-03 | r 2.398e-03 init 1.742e-04 anchor 4.001e-04 eik 2.441e-01 | lr 5.00e-05 | 14s
+[Adam] step   550 | total 2.7031e-03 | r 2.191e-03 init 1.901e-04 anchor 3.795e-04 eik 2.371e-01 | lr 5.00e-05 | 15s
+[Adam] step   600 | total 2.8567e-03 | r 2.313e-03 init 1.912e-04 anchor 4.003e-04 eik 2.515e-01 | lr 5.00e-05 | 17s
+[Adam] step   650 | total 2.8362e-03 | r 2.308e-03 init 1.823e-04 anchor 3.984e-04 eik 2.432e-01 | lr 5.00e-05 | 18s
+[Adam] step   700 | total 2.8258e-03 | r 2.296e-03 init 1.949e-04 anchor 3.907e-04 eik 2.433e-01 | lr 5.00e-05 | 20s
+[Adam] step   750 | total 2.7434e-03 | r 2.213e-03 init 1.814e-04 anchor 3.830e-04 eik 2.454e-01 | lr 5.00e-05 | 21s
+[Adam] step   800 | total 2.7014e-03 | r 2.182e-03 init 2.030e-04 anchor 3.796e-04 eik 2.407e-01 | lr 5.00e-05 | 22s
+[Adam] step   850 | total 2.6696e-03 | r 2.150e-03 init 2.185e-04 anchor 3.712e-04 eik 2.429e-01 | lr 5.00e-05 | 24s
+[Adam] step   900 | total 2.6576e-03 | r 2.121e-03 init 2.148e-04 anchor 3.801e-04 eik 2.482e-01 | lr 5.00e-05 | 25s
+[Adam] step   950 | total 2.5740e-03 | r 2.046e-03 init 2.046e-04 anchor 3.884e-04 eik 2.459e-01 | lr 5.00e-05 | 26s
+[Adam] step  1000 | total 2.3992e-03 | r 1.881e-03 init 2.050e-04 anchor 3.693e-04 eik 2.479e-01 | lr 5.00e-05 | 28s
+[Adam] step  1050 | total 2.4572e-03 | r 1.947e-03 init 1.952e-04 anchor 3.771e-04 eik 2.438e-01 | lr 5.00e-05 | 29s
+[Adam] step  1100 | total 2.4010e-03 | r 1.888e-03 init 2.121e-04 anchor 3.552e-04 eik 2.489e-01 | lr 5.00e-05 | 31s
+[Adam] step  1150 | total 2.3333e-03 | r 1.831e-03 init 2.073e-04 anchor 3.583e-04 eik 2.440e-01 | lr 5.00e-05 | 32s
+[Adam] step  1200 | total 2.2987e-03 | r 1.804e-03 init 2.296e-04 anchor 3.529e-04 eik 2.441e-01 | lr 5.00e-05 | 33s
+[Adam] step  1250 | total 2.2550e-03 | r 1.758e-03 init 1.917e-04 anchor 3.463e-04 eik 2.476e-01 | lr 5.00e-05 | 35s
+[Adam] step  1300 | total 2.2721e-03 | r 1.777e-03 init 2.256e-04 anchor 3.507e-04 eik 2.490e-01 | lr 5.00e-05 | 36s
+[Adam] step  1350 | total 2.4264e-03 | r 1.915e-03 init 2.272e-04 anchor 3.626e-04 eik 2.536e-01 | lr 5.00e-05 | 38s
+[Adam] step  1400 | total 2.2561e-03 | r 1.749e-03 init 2.244e-04 anchor 3.550e-04 eik 2.494e-01 | lr 5.00e-05 | 39s

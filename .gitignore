@@ -1,0 +1,29 @@
+# 图片不上传
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 编辑器 / 会话配置
+.vscode/
+.zcode/
+
+# 备份文件
+*.bak
+*.bak_*
+
+# 逐迭代权重快照（体积大，仅保留 *_init.pt 初始化结果）
+*_iter*.pt
+hjb_state_iter*.json
+*_smoke*.pt
+hjb_state_smoke*.json
+
+# 训练产物目录（本地生成）
+loop_figures/
+*_figures/
