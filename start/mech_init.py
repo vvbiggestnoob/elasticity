@@ -689,7 +689,7 @@ def save_field_figures(mech, phi_net, cfg: MechInitConfig,
         pu.save_field(_fig_path(cfg, kind, tag), X, Y,
                       f.T.numpy(),   # (nx,ny) -> (ny,nx)
                       lx=cfg.lx, ly=cfg.ly, cmap=cmap, symmetric=sym,
-                      block=block, title=f"{name}（t = {cfg.phi_t}）")
+                      block=block, title=f"{name}（t = {cfg.phi_t:.4g}）")
 
 
 def save_loss_figures(adam_history: list, lbfgs_history: list, cfg: MechInitConfig):

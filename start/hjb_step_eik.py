@@ -1040,21 +1040,21 @@ def save_state_figures(phi, phi_ref, cfg: HJBConfig, tag: Optional[str] = None,
     pu.save_field(_fig_path(cfg, "phi", tag), X, Y, pa,
                   lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_DIV,
                   clim=(-phi_lim, phi_lim),
-                  contours=[(pb, "0.45", "--", f"φ=0 @ t={cfg.t_current}"),
-                            (pa, "k", "-", f"φ=0 @ t={cfg.t_new}")],
+                  contours=[(pb, "0.45", "--", f"φ=0 @ t={cfg.t_current:.4g}"),
+                            (pa, "k", "-", f"φ=0 @ t={cfg.t_new:.4g}")],
                   block=_block(cfg),
-                  title=f"φ (t = {cfg.t_new})，黑实线 = 演化后零水平集")
+                  title=f"φ (t = {cfg.t_new:.4g})，黑实线 = 演化后零水平集")
     pu.save_field(_fig_path(cfg, "geometry", tag), X, Y,
                   s_after.reshape(shape).numpy(),
                   lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_MAT, clim=(0.0, 1.0),
                   contours=[(pa, "k", "-", None)], block=_block(cfg),
-                  title=f"geometry S (t = {cfg.t_new})，黑 = 材料")
+                  title=f"geometry S (t = {cfg.t_new:.4g})，黑 = 材料")
     if with_before:
         pu.save_field(_fig_path(cfg, "S_before", tag), X, Y,
                       s_before.reshape(shape).numpy(),
                       lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_MAT, clim=(0.0, 1.0),
                       contours=[(pb, "k", "-", None)], block=_block(cfg),
-                      title=f"S before (t = {cfg.t_current})")
+                      title=f"S before (t = {cfg.t_current:.4g})")
     pu.save_field(_fig_path(cfg, "delta_S", tag), X, Y,
                   (s_after - s_before).reshape(shape).numpy(),
                   lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_DIV, symmetric=True,
@@ -1126,7 +1126,7 @@ def save_mech_fields_masked(mech, phi, cfg: HJBConfig):
         pu.save_field(_fig_path(cfg, kind), X, Y, f.reshape(shape).numpy(),
                       lx=cfg.lx, ly=cfg.ly, cmap=cmap, symmetric=sym,
                       block=_block(cfg),
-                      title=f"{name}（t = {cfg.t_new}）")
+                      title=f"{name}（t = {cfg.t_new:.4g}）")
 
 
 # ---------------------------------------------------------------------------
