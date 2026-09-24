@@ -27,3 +27,12 @@ hjb_state_smoke*.json
 # 训练产物目录（本地生成）
 loop_figures/
 *_figures/
+
+# 运行日志
+*.log
+
+# exp02_from0 的权重由 run_from0.py 自动从 exp01_bridge/weights 复制，不入库
+exp02_from0/weights/
+
+# 冒烟测试临时产物
+start/_smoke_layout/

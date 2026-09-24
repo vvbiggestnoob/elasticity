@@ -65,14 +65,12 @@ import matplotlib
 matplotlib.use("Agg")  # 无界面后端，只保存图片
 import matplotlib.pyplot as plt
 
-# 中文标签（vn_field / vn_boundary 图）：Windows 自带微软雅黑/黑体
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-
-from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
 import torch
 from torch.quasirandom import SobolEngine
+
+import plot_utils as pu
+
+pu.setup_style()  # 中文标签字体 + 统一黑白风格
 
 from networks import NetworkConfig, build_mechanics_networks, build_sdf_network, MECH_NET_NAMES
 
@@ -200,8 +198,12 @@ class HJBConfig:
     fig_nx: int = 321              # 存图网格
     fig_ny: int = 101
     # 精简存图（交替循环用）：True 时跳过 Adam/L-BFGS 过程图、初始快照与力学场图，
-    # 只保留 vn_field.png、final.png、loss_history.png
+    # 只保留 vn / vn_boundary / energy / kinetic / phi / geometry / delta_S /
+    # loss_hjb_adam / loss_hjb_lbfgs 九种单面板图
     quiet_figures: bool = False
+    # 出图标签（plot_utils.fig_path）：非空时按类型分文件夹保存
+    # （{fig_dir}/{kind}/{fig_tag}.png，交替循环传 iter{k:03d}）；空 = 平铺文件名
+    fig_tag: str = ""
 
     # 路径
     phi_path: str = "weights/phi_init.pt"       # 输入：当前 SDF
@@ -813,9 +815,8 @@ def train_adam(phi, phi_ref, pools: PointSets, cfg: HJBConfig,
 
         if not cfg.quiet_figures and (step % cfg.fig_every == 0
                                       or step == cfg.adam_steps - 1):
-            save_snapshot(phi, phi_ref, cfg,
-                          os.path.join(cfg.fig_dir, f"adam_step{step:06d}.png"),
-                          title=f"Adam step {step}")
+            save_state_figures(phi, phi_ref, cfg, tag=f"adam{step:06d}",
+                               with_before=False)
     print(f"[Adam] 结束，用时 {time.time()-t0:.0f}s")
 
 
@@ -886,9 +887,8 @@ def train_lbfgs(phi, phi_ref, train_data: PointSets, val_data: PointSets,
 
         if not cfg.quiet_figures and (block % cfg.fig_every_blocks == 0
                                       or block == cfg.lbfgs_blocks - 1):
-            save_snapshot(phi, phi_ref, cfg,
-                          os.path.join(cfg.fig_dir, f"lbfgs_block{block:03d}.png"),
-                          title=f"L-BFGS block {block}")
+            save_state_figures(phi, phi_ref, cfg, tag=f"lbfgs{block:03d}",
+                               with_before=False)
 
         if cfg.lbfgs_early_stop and stall >= cfg.early_stop_patience:
             print(f"[L-BFGS] 早停：连续 {stall} 块 {cfg.early_stop_metric} "
@@ -906,8 +906,13 @@ def train_lbfgs(phi, phi_ref, train_data: PointSets, val_data: PointSets,
 
 
 # ---------------------------------------------------------------------------
-# 存图
+# 存图（统一风格见 plot_utils：一图一文件、黑白为主、硬块红框、四角不标记）
 # ---------------------------------------------------------------------------
+
+def _fig_path(cfg: HJBConfig, kind: str, tag: Optional[str] = None) -> str:
+    """kind = 类型（子文件夹名）；tag 默认取 cfg.fig_tag（循环传 iter{k:03d}）。"""
+    return pu.fig_path(cfg.fig_dir, kind, cfg.fig_tag if tag is None else tag)
+
 
 @torch.no_grad()
 def _grid_xy(cfg: HJBConfig) -> torch.Tensor:
@@ -918,50 +923,24 @@ def _grid_xy(cfg: HJBConfig) -> torch.Tensor:
     return torch.stack([X.reshape(-1), Y.reshape(-1)], dim=1)
 
 
-def _panels_plot(panels, path: str, title: str, cfg: HJBConfig,
-                 contours: Optional[List[Tuple[torch.Tensor, str, str]]] = None,
-                 contour_ax: int = 0):
-    """通用多面板 pcolormesh 存图。panels: [(Z(ny,nx) numpy, name, cmap)], ..."""
+def _grid_XYn(cfg: HJBConfig):
+    """存图网格的 numpy 坐标矩阵 (ny, nx)。"""
     xs = torch.linspace(0.0, cfg.lx, cfg.fig_nx).numpy()
     ys = torch.linspace(0.0, cfg.ly, cfg.fig_ny).numpy()
     X, Y = torch.meshgrid(torch.as_tensor(xs), torch.as_tensor(ys), indexing="xy")
-    Xn, Yn = X.numpy(), Y.numpy()
-
-    ncol = min(3, len(panels))
-    nrow = (len(panels) + ncol - 1) // ncol
-    fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 2.6 * nrow),
-                             constrained_layout=True)
-    axes = [axes] if nrow * ncol == 1 else list(axes.flat)
-    for k, (ax, (Z, name, cmap)) in enumerate(zip(axes, panels)):
-        pc = ax.pcolormesh(Xn, Yn, Z, cmap=cmap, shading="auto")
-        ax.set_aspect("equal")
-        ax.set_title(name)
-        fig.colorbar(pc, ax=ax, shrink=0.85)
-        if k == contour_ax and contours:
-            for Zc, color, label in contours:
-                ax.contour(Xn, Yn, Zc, levels=[0.0], colors=[color],
-                           linewidths=1.4)
-            # 用 Line2D 代理建图例：零水平集可能不在图域内（空等值线），
-            # 直接从 contour collection 取 handle 会崩
-            handles = [Line2D([0], [0], color=c, lw=1.4, label=l)
-                       for _, c, l in contours]
-            ax.legend(handles=handles, loc="upper right", fontsize=8)
-    for ax in axes[len(panels):]:
-        ax.axis("off")
-    if title:
-        fig.suptitle(title)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig.savefig(path, dpi=130)
-    plt.close(fig)
+    return X.numpy(), Y.numpy()
 
 
-def save_vn_figure(mech, phi_ref, cfg: HJBConfig, omega2: float, area: float,
-                   path: str):
-    """V_n 场及其两个分量（应变能密度、ω²ρ|u|² 动能密度）三联图。
+def _block(cfg: HJBConfig):
+    return (cfg.block_x, cfg.block_y)
 
-    V_n 面板：色标按罚压力量级截断（重块内 V_n≈−25 是离群值，全量程色标
-    会把边界上 ±1 的关键变化洗成白色），并叠加当前零水平集（黑线）与
-    重块区域（虚线框）。红 = V_n>0 保留/外扩，蓝 = V_n<0 侵蚀。
+
+def save_vn_figures(mech, phi_ref, cfg: HJBConfig, omega2: float, area: float):
+    """V_n 场及其两个分量，三张单图：vn / energy / kinetic。
+
+    V_n 图：黑白对称色标按罚压力量级截断（重块内 V_n≈−25 是离群值，全量程
+    色标会把边界上 ±1 的关键变化洗成中灰），黑 = 侵蚀（V_n<0）、白 = 外扩；
+    叠加当前零水平集（黑线）与硬块红框。
     """
     grid = _grid_xy(cfg)
     vn, eng, kin = compute_vn(mech, phi_ref, grid, cfg, omega2, area)
@@ -969,45 +948,27 @@ def save_vn_figure(mech, phi_ref, cfg: HJBConfig, omega2: float, area: float,
     penalty = (area - cfg.v_target) / cfg.alpha
     lim = max(2.0 * abs(penalty), 0.2)   # 截断色标：±2 倍罚压力
     phi0 = eval_phi_at(phi_ref, grid, cfg.t_current).reshape(shape).numpy()
-    panels = [
-        (vn.reshape(shape).numpy(),
-         f"V_n（色标 ±{lim:.2f} 截断；红=保留 蓝=侵蚀）", "RdBu_r"),
-        (eng.reshape(shape).numpy(), "strain energy ε:A:ε", "viridis"),
-        ((omega2 * kin).reshape(shape).numpy(), "ω²ρ|u|²", "viridis"),
-    ]
-    fig, axes = plt.subplots(1, 3, figsize=(15.6, 2.9), constrained_layout=True)
-    xs = torch.linspace(0.0, cfg.lx, cfg.fig_nx).numpy()
-    ys = torch.linspace(0.0, cfg.ly, cfg.fig_ny).numpy()
-    X, Y = torch.meshgrid(torch.as_tensor(xs), torch.as_tensor(ys), indexing="xy")
-    for i, (ax, (Z, name, cmap)) in enumerate(zip(axes, panels)):
-        if cmap == "RdBu_r":
-            pc = ax.pcolormesh(X.numpy(), Y.numpy(), Z, cmap=cmap, shading="auto",
-                               vmin=-lim, vmax=lim)
-            # 当前零水平集 + 重块框
-            ax.contour(X.numpy(), Y.numpy(), phi0, levels=[0.0], colors=["k"],
-                       linewidths=1.4)
-            ax.add_patch(Rectangle((cfg.block_x[0], cfg.block_y[0]),
-                                   cfg.block_x[1] - cfg.block_x[0],
-                                   cfg.block_y[1] - cfg.block_y[0],
-                                   fill=False, ec="k", ls="--", lw=1.0))
-        else:
-            pc = ax.pcolormesh(X.numpy(), Y.numpy(), Z, cmap=cmap, shading="auto")
-        ax.set_aspect("equal")
-        ax.set_title(name)
-        fig.colorbar(pc, ax=ax, shrink=0.85)
-    fig.suptitle(f"V_n field (fixed for this evolution) | ω² = {omega2:.6f}, "
-                 f"area = {area:.4f}, C = {cfg.v_target}, p = {penalty:+.3f}")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig.savefig(path, dpi=130)
-    plt.close(fig)
+    X, Y = _grid_XYn(cfg)
+    head = f"ω² = {omega2:.4f}，area = {area:.4f}，p = {penalty:+.3f}"
+    pu.save_field(_fig_path(cfg, "vn"), X, Y, vn.reshape(shape).numpy(),
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_DIV, clim=(-lim, lim),
+                  contours=[(phi0, "k", "-", "φ = 0")], block=_block(cfg),
+                  title=f"V_n（黑 = 侵蚀，白 = 外扩；±{lim:.2f} 截断）| {head}")
+    pu.save_field(_fig_path(cfg, "energy"), X, Y, eng.reshape(shape).numpy(),
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_SEQ, block=_block(cfg),
+                  title=f"strain energy ε:A:ε | {head}")
+    pu.save_field(_fig_path(cfg, "kinetic"), X, Y,
+                  (omega2 * kin).reshape(shape).numpy(),
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_SEQ, block=_block(cfg),
+                  title=f"ω²ρ|u|² | {head}")
 
 
 def save_vn_boundary_figure(mech, phi_ref, cfg: HJBConfig, omega2: float,
-                            area: float, path: str):
+                            area: float):
     """边界 V_n 剖面图：四条边沿周长逆时针展开（左下角为 s=0），画 V_n(s)。
 
-    这是最直观的"哪段边界会动"判读图：V_n < 0（红色填充）的边段本步将
-    向内侵蚀，V_n > 0（绿色）的边段保留/想外扩。竖虚线 = 四角位置。
+    黑线 = V_n(s)，灰色填充 = V_n<0 的边段（本步将向内侵蚀）。四角固定，
+    按约定不做标记。
     """
     n_h, n_v = 800, 250
     xs = torch.linspace(0.0, cfg.lx, n_h, dtype=cfg.dtype)
@@ -1023,7 +984,7 @@ def save_vn_boundary_figure(mech, phi_ref, cfg: HJBConfig, omega2: float,
     ]
     s_all, vn_all = [], []
     s0 = 0.0
-    corners = [0.0]   # 角点的 s 坐标
+    corners = [0.0]   # 各边分段的 s 坐标（仅用于边名定位，不画角标记）
     for _, pts, L in segs:
         vn, _, _ = compute_vn(mech, phi_ref, pts, cfg, omega2, area)
         s_all.append(s0 + torch.linspace(0.0, L, pts.shape[0], dtype=cfg.dtype))
@@ -1034,91 +995,76 @@ def save_vn_boundary_figure(mech, phi_ref, cfg: HJBConfig, omega2: float,
     v = torch.cat(vn_all).numpy()
     penalty = (area - cfg.v_target) / cfg.alpha
 
-    fig, ax = plt.subplots(figsize=(13.5, 3.6), constrained_layout=True)
-    ax.plot(s, v, color="tab:blue", lw=1.2, label="V_n(s)")
-    ax.axhline(0.0, color="k", lw=1.0)
-    ax.fill_between(s, v, 0.0, where=(v < 0), color="tab:red", alpha=0.35,
+    fig, ax = plt.subplots(figsize=(10.5, 3.8), constrained_layout=True)
+    ax.plot(s, v, color="k", lw=1.2, label="V_n(s)")
+    ax.axhline(0.0, color="0.4", lw=1.0)
+    ax.fill_between(s, v, 0.0, where=(v < 0), color="0.75",
                     label="V_n < 0 → 本步侵蚀", interpolate=True)
-    ax.fill_between(s, v, 0.0, where=(v > 0), color="tab:green", alpha=0.18,
-                    label="V_n > 0 → 保留/外扩", interpolate=True)
-    # 四角与边名标注
-    corner_labels = ["左下角", "右下角", "右上角", "左上角", "左下角"]
-    for cs, cl in zip(corners, corner_labels):
-        ax.axvline(cs, color="gray", ls="--", lw=0.8)
-        ax.text(cs, ax.get_ylim()[1], cl, ha="center", va="bottom", fontsize=8,
-                color="gray")
+    # 边名标注（四角不标记）
     for (ename, _, L), c0, c1 in zip(segs, corners[:-1], corners[1:]):
         ax.text(0.5 * (c0 + c1), 0.02, ename, ha="center", va="bottom",
-                fontsize=9, color="k",
+                fontsize=9, color="0.35",
                 transform=ax.get_xaxis_transform())
     ax.set_xlim(0.0, s0)
     ax.set_xlabel("周长 s（逆时针，从左下角起）")
     ax.set_ylabel("V_n")
     ax.set_title(f"边界 V_n 剖面 | ω² = {omega2:.4f}，area = {area:.4f}，"
-                 f"罚压力 p = {penalty:+.3f}（红段 = 本步将被侵蚀的边界）")
+                 f"罚压力 p = {penalty:+.3f}（灰段 = 本步将被侵蚀的边界）")
     ax.legend(loc="upper right", fontsize=8)
     ax.grid(alpha=0.3)
+    path = _fig_path(cfg, "vn_boundary")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig.savefig(path, dpi=130)
+    fig.savefig(path, dpi=150)
     plt.close(fig)
 
 
 @torch.no_grad()
-def save_snapshot(phi, phi_ref, cfg: HJBConfig, path: str, title: str = ""):
-    """四联图：φ(t_new) + 零水平集对比、S 演化前、S 演化后、ΔS。"""
+def save_state_figures(phi, phi_ref, cfg: HJBConfig, tag: Optional[str] = None,
+                       with_before: bool = True):
+    """演化状态单图组：phi（零水平集前后对比）、geometry（S 演化后）、
+    delta_S；with_before=True 时另存 S_before（单独运行的初始快照用）。
+
+    geometry：材料场 S(t_new)，黑 = 材料、白 = 孔洞，零水平集黑线，硬块红框。
+    """
     grid = _grid_xy(cfg)
     phi_before = eval_phi_at(phi_ref, grid, cfg.t_current)
     phi_after = eval_phi_at(phi, grid, cfg.t_new)
     s_before = 0.5 * (1.0 + torch.tanh(phi_before / (2.0 * cfg.beta)))
     s_after = 0.5 * (1.0 + torch.tanh(phi_after / (2.0 * cfg.beta)))
     shape = (cfg.fig_ny, cfg.fig_nx)
-    ds = (s_after - s_before).reshape(shape).numpy()
-    ds_lim = max(float(torch.tensor(ds).abs().max()), 1e-12)
+    pb = phi_before.reshape(shape).numpy()
+    pa = phi_after.reshape(shape).numpy()
+    X, Y = _grid_XYn(cfg)
+    phi_lim = max(float(torch.cat([phi_before, phi_after]).abs().max()), 1e-12)
 
-    panels = [
-        (phi_after.reshape(shape).numpy(), f"φ (t={cfg.t_new})", "viridis"),
-        (s_before.reshape(shape).numpy(), f"S before (t={cfg.t_current})", "viridis"),
-        (s_after.reshape(shape).numpy(), f"S after (t={cfg.t_new})", "viridis"),
-        (ds, "ΔS = S_after − S_before", "RdBu_r"),
-    ]
-    contours = [
-        (phi_before.reshape(shape).numpy(), "white", f"φ=0 @ t={cfg.t_current}"),
-        (phi_after.reshape(shape).numpy(), "red", f"φ=0 @ t={cfg.t_new}"),
-    ]
-    # ΔS 面板用对称色标
-    xs = torch.linspace(0.0, cfg.lx, cfg.fig_nx).numpy()
-    ys = torch.linspace(0.0, cfg.ly, cfg.fig_ny).numpy()
-    X, Y = torch.meshgrid(torch.as_tensor(xs), torch.as_tensor(ys), indexing="xy")
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 4.6), constrained_layout=True)
-    for k, (ax, (Z, name, cmap)) in enumerate(zip(axes.flat, panels)):
-        if name.startswith("ΔS"):
-            pc = ax.pcolormesh(X.numpy(), Y.numpy(), Z, cmap=cmap, shading="auto",
-                               vmin=-ds_lim, vmax=ds_lim)
-        else:
-            pc = ax.pcolormesh(X.numpy(), Y.numpy(), Z, cmap=cmap, shading="auto")
-        ax.set_aspect("equal")
-        ax.set_title(name)
-        fig.colorbar(pc, ax=ax, shrink=0.85)
-        if k == 0:
-            for Zc, color, label in contours:
-                ax.contour(X.numpy(), Y.numpy(), Zc, levels=[0.0],
-                           colors=[color], linewidths=1.4)
-            # Line2D 代理图例（避免零水平集不在图域内时取空 handle 崩溃）
-            handles = [Line2D([0], [0], color=c, lw=1.4, label=l)
-                       for _, c, l in contours]
-            ax.legend(handles=handles, loc="upper right", fontsize=8)
-    if title:
-        fig.suptitle(title)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig.savefig(path, dpi=130)
-    plt.close(fig)
+    pu.save_field(_fig_path(cfg, "phi", tag), X, Y, pa,
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_DIV,
+                  clim=(-phi_lim, phi_lim),
+                  contours=[(pb, "0.45", "--", f"φ=0 @ t={cfg.t_current}"),
+                            (pa, "k", "-", f"φ=0 @ t={cfg.t_new}")],
+                  block=_block(cfg),
+                  title=f"φ (t = {cfg.t_new})，黑实线 = 演化后零水平集")
+    pu.save_field(_fig_path(cfg, "geometry", tag), X, Y,
+                  s_after.reshape(shape).numpy(),
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_MAT, clim=(0.0, 1.0),
+                  contours=[(pa, "k", "-", None)], block=_block(cfg),
+                  title=f"geometry S (t = {cfg.t_new})，黑 = 材料")
+    if with_before:
+        pu.save_field(_fig_path(cfg, "S_before", tag), X, Y,
+                      s_before.reshape(shape).numpy(),
+                      lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_MAT, clim=(0.0, 1.0),
+                      contours=[(pb, "k", "-", None)], block=_block(cfg),
+                      title=f"S before (t = {cfg.t_current})")
+    pu.save_field(_fig_path(cfg, "delta_S", tag), X, Y,
+                  (s_after - s_before).reshape(shape).numpy(),
+                  lx=cfg.lx, ly=cfg.ly, cmap=pu.CMAP_DIV, symmetric=True,
+                  block=_block(cfg),
+                  title="ΔS = S_after − S_before（黑 = 侵蚀，白 = 新增）")
 
 
-def save_loss_figure(adam_history: list, lbfgs_history: list, cfg: HJBConfig, path: str):
-    """损失曲线：左图 Adam 各项分量，右图 L-BFGS 训练/验证总损失。"""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6), constrained_layout=True)
-
+def save_loss_figures(adam_history: list, lbfgs_history: list, cfg: HJBConfig):
+    """损失曲线两张单图：loss_hjb_adam（Adam 各项分量）、loss_hjb_lbfgs
+    （L-BFGS 训练/验证总损失）。"""
     if adam_history:
         steps = [h["step"] for h in adam_history]
         keys = [("total", "total"), ("r", "L_r (HJB)"), ("init", "L_0 (IC)")]
@@ -1126,31 +1072,25 @@ def save_loss_figure(adam_history: list, lbfgs_history: list, cfg: HJBConfig, pa
             keys.append(("anchor", "L_anchor"))
         if any("eik" in h for h in adam_history):
             keys.append(("eik", "L_eik"))
-        for key, label in keys:
-            vals = [h.get(key, float("nan")) for h in adam_history]
-            ax1.semilogy(steps, vals, label=label)
-    ax1.set_xlabel("Adam step")
-    ax1.set_ylabel("loss")
-    ax1.set_title("Stage A (Adam)")
-    ax1.legend(fontsize=8)
-    ax1.grid(alpha=0.3)
-
+        if any("corner" in h for h in adam_history):
+            keys.append(("corner", "L_corner"))
+        series = [(steps, [h.get(key, float("nan")) for h in adam_history], label)
+                  for key, label in keys]
+        pu.save_lines(_fig_path(cfg, "loss_hjb_adam"), series, logy=True,
+                      title="HJB Stage A (Adam)", xlabel="Adam step",
+                      ylabel="loss")
     if lbfgs_history:
         blocks = list(range(len(lbfgs_history)))
-        ax2.semilogy(blocks, [h["total"] for h in lbfgs_history], "o-", label="train")
-        ax2.semilogy(blocks, [h["val"] for h in lbfgs_history], "s-", label="val")
-    ax2.set_xlabel("L-BFGS block")
-    ax2.set_ylabel("total loss")
-    ax2.set_title("Stage B (L-BFGS)")
-    ax2.legend(fontsize=8)
-    ax2.grid(alpha=0.3)
-
-    fig.savefig(path, dpi=110)
-    plt.close(fig)
+        pu.save_lines(_fig_path(cfg, "loss_hjb_lbfgs"),
+                      [(blocks, [h["total"] for h in lbfgs_history], "train"),
+                       (blocks, [h["val"] for h in lbfgs_history], "val")],
+                      logy=True, title="HJB Stage B (L-BFGS)",
+                      xlabel="L-BFGS block", ylabel="total loss")
 
 
-def save_mech_fields_masked(mech, phi, cfg: HJBConfig, path: str):
-    """最终输出（说明文档 §10）：位移/应力/应变乘 S(t_new) 后出图（孔洞区域置 0）。"""
+def save_mech_fields_masked(mech, phi, cfg: HJBConfig):
+    """最终输出（说明文档 §10）：位移/应力/应变乘 S(t_new) 后出图（孔洞区域
+    置 0），六个场各一张单图（masked_* 类型文件夹）。"""
     grid = _grid_xy(cfg)
     shape = (cfg.fig_ny, cfg.fig_nx)
     with torch.no_grad():
@@ -1174,11 +1114,19 @@ def save_mech_fields_masked(mech, phi, cfg: HJBConfig, path: str):
     with torch.no_grad():
         u_mag = torch.sqrt(u_x ** 2 + u_y ** 2)
         fields = [
-            (u_mag * s, "|u|·S"), (sxx * s, "σ_xx·S"), (sxy * s, "σ_xy·S"),
-            (syy * s, "σ_yy·S"), (eps_xx * s, "ε_xx·S"), (eps_yy * s, "ε_yy·S"),
+            ("masked_u_mag", u_mag * s, "|u|·S", pu.CMAP_SEQ, False),
+            ("masked_sigma_xx", sxx * s, "σ_xx·S", pu.CMAP_DIV, True),
+            ("masked_sigma_xy", sxy * s, "σ_xy·S", pu.CMAP_DIV, True),
+            ("masked_sigma_yy", syy * s, "σ_yy·S", pu.CMAP_DIV, True),
+            ("masked_eps_xx", eps_xx * s, "ε_xx·S", pu.CMAP_DIV, True),
+            ("masked_eps_yy", eps_yy * s, "ε_yy·S", pu.CMAP_DIV, True),
         ]
-        panels = [(f.reshape(shape).numpy(), name, "RdBu_r") for f, name in fields]
-    _panels_plot(panels, path, f"mechanics fields × S (t={cfg.t_new})", cfg)
+    X, Y = _grid_XYn(cfg)
+    for kind, f, name, cmap, sym in fields:
+        pu.save_field(_fig_path(cfg, kind), X, Y, f.reshape(shape).numpy(),
+                      lx=cfg.lx, ly=cfg.ly, cmap=cmap, symmetric=sym,
+                      block=_block(cfg),
+                      title=f"{name}（t = {cfg.t_new}）")
 
 
 # ---------------------------------------------------------------------------
@@ -1341,10 +1289,8 @@ def main(cfg: Optional[HJBConfig] = None):
     vn = pools.interior.vn
     print(f"V_n 场（{vn.shape[0]} 池点）：mean = {float(vn.mean()):+.4f} | "
           f"min = {float(vn.min()):+.4f} | max = {float(vn.max()):+.4f}")
-    save_vn_figure(mech, phi_ref, cfg, omega2_before, area_before,
-                   os.path.join(cfg.fig_dir, "vn_field.png"))
-    save_vn_boundary_figure(mech, phi_ref, cfg, omega2_before, area_before,
-                            os.path.join(cfg.fig_dir, "vn_boundary.png"))
+    save_vn_figures(mech, phi_ref, cfg, omega2_before, area_before)
+    save_vn_boundary_figure(mech, phi_ref, cfg, omega2_before, area_before)
 
     train_data = build_point_sets(cfg, mech, phi_ref, omega2_before, area_before,
                                   seed_offset=110, interior_n=cfg.lbfgs_interior,
@@ -1369,9 +1315,7 @@ def main(cfg: Optional[HJBConfig] = None):
 
     # 初始状态图
     if not cfg.quiet_figures:
-        save_snapshot(phi, phi_ref, cfg,
-                      os.path.join(cfg.fig_dir, "step000000_initial.png"),
-                      title="initial (phi = phi_ref, untrained)")
+        save_state_figures(phi, phi_ref, cfg, tag="initial")
 
     # 4. 阶段 A：Adam
     adam_history: list = []
@@ -1382,13 +1326,10 @@ def main(cfg: Optional[HJBConfig] = None):
     train_lbfgs(phi, phi_ref, train_data, val_data, cfg, lbfgs_history)
 
     # 6. 收尾：损失曲线、最终状态图、力学场乘 S 出图
-    save_loss_figure(adam_history, lbfgs_history, cfg,
-                     os.path.join(cfg.fig_dir, "loss_history.png"))
-    save_snapshot(phi, phi_ref, cfg, os.path.join(cfg.fig_dir, "final.png"),
-                  title=f"final (t={cfg.t_new})")
+    save_loss_figures(adam_history, lbfgs_history, cfg)
+    save_state_figures(phi, phi_ref, cfg, with_before=False)
     if not cfg.quiet_figures:
-        save_mech_fields_masked(mech, phi, cfg,
-                                os.path.join(cfg.fig_dir, "mech_fields_masked.png"))
+        save_mech_fields_masked(mech, phi, cfg)
 
     # 7. 保存演化后 SDF 权重（纯 state_dict，与 networks.py 约定一致）
     torch.save(phi.state_dict(), cfg.phi_out)

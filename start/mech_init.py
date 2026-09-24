@@ -43,6 +43,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
 
+import plot_utils as pu
+
+pu.setup_style()  # 中文标签字体 + 统一黑白风格
+
 from networks import NetworkConfig, build_mechanics_networks, build_sdf_network, MECH_NET_NAMES
 
 # 所有相对路径相对本脚本所在目录解析，从任意工作目录运行均可
@@ -157,10 +161,13 @@ class MechInitConfig:
     # 交替循环用（默认值保持单独运行行为不变）：
     # phi_t 为 SDF 求值的伪时间切片（初始化阶段恒 0；循环第 k 步几何在 t=k·dt）；
     # init_suffix 非 None 时从 weights_dir/*<init_suffix> 热启动力学网络；
-    # quiet_figures=True 时跳过 Adam/L-BFGS 过程图与初始图，只存 final 与 loss_history
+    # quiet_figures=True 时跳过 Adam/L-BFGS 过程图与初始图，只存最终场图与损失图
     phi_t: float = 0.0
     init_suffix: Optional[str] = None
     quiet_figures: bool = False
+    # 出图标签（plot_utils.fig_path）：非空时按类型分文件夹保存
+    # （{fig_dir}/{kind}/{fig_tag}.png，交替循环传 iter{k:03d}）；空 = 平铺文件名
+    fig_tag: str = ""
 
     dtype: torch.dtype = torch.float64
 
@@ -477,9 +484,7 @@ def train_adam(mech, phi_net, pools, cfg: MechInitConfig, gen: torch.Generator, 
 
         if not cfg.quiet_figures and (step % cfg.fig_every == 0
                                       or step == cfg.adam_steps - 1):
-            save_field_figure(mech, phi_net, cfg,
-                              os.path.join(cfg.fig_dir, f"adam_step{step:06d}.png"),
-                              title=f"Adam step {step}")
+            save_field_figures(mech, phi_net, cfg, tag=f"adam{step:06d}")
     print(f"[Adam] 结束，用时 {time.time()-t0:.0f}s")
 
 
@@ -567,9 +572,7 @@ def train_lbfgs(mech, phi_net, cfg: MechInitConfig, history: list):
 
         if not cfg.quiet_figures and (block % cfg.fig_every_blocks == 0
                                       or block == cfg.lbfgs_blocks - 1):
-            save_field_figure(mech, phi_net, cfg,
-                              os.path.join(cfg.fig_dir, f"lbfgs_block{block:03d}.png"),
-                              title=f"L-BFGS block {block}")
+            save_field_figures(mech, phi_net, cfg, tag=f"lbfgs{block:03d}")
 
         if cfg.lbfgs_early_stop and stall >= cfg.early_stop_patience:
             print(f"[L-BFGS] 早停：连续 {stall} 块 {cfg.early_stop_metric} "
@@ -638,16 +641,31 @@ def diagnose(mech, phi_net, cfg: MechInitConfig):
 
 
 # ---------------------------------------------------------------------------
-# 存图
+# 存图（统一风格见 plot_utils：一图一文件、黑白为主、硬块红框、四角不标记）
 # ---------------------------------------------------------------------------
 
+def _fig_path(cfg: MechInitConfig, kind: str, tag: Optional[str] = None) -> str:
+    """kind = 类型（子文件夹名）；tag 默认取 cfg.fig_tag（循环传 iter{k:03d}）。"""
+    return pu.fig_path(cfg.fig_dir, kind, cfg.fig_tag if tag is None else tag)
+
+
+def _grid_XYn(cfg: MechInitConfig):
+    """存图网格的 numpy 坐标矩阵 (ny, nx)。"""
+    import numpy as np
+    xs = np.linspace(0.0, cfg.lx, cfg.fig_nx)
+    ys = np.linspace(0.0, cfg.ly, cfg.fig_ny)
+    return np.meshgrid(xs, ys)  # indexing="xy" 默认：(ny, nx)
+
+
 @torch.no_grad()
-def save_field_figure(mech, phi_net, cfg: MechInitConfig, path: str, title: str = ""):
-    """六联图：|u|、u_x、u_y、σ_xx、σ_xy、σ_yy 乘材料场 S（孔洞区域置 0）。
+def save_field_figures(mech, phi_net, cfg: MechInitConfig,
+                       tag: Optional[str] = None):
+    """位移/应力场乘材料场 S（孔洞区域置 0），六个场各一张单图：
+    u_mag / u_x / u_y / sigma_xx / sigma_xy / sigma_yy。
 
     S 在当前几何切片（t = cfg.phi_t）上取值；网格上逐点取值，无导数。
+    |u| 用 gray_r（黑 = 大），有符号场用 gray 对称色标（黑 = 负、白 = 正）。
     """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     pts = _grid_points(cfg)
     s = heaviside_s(phi_net, pts, cfg).reshape(cfg.fig_nx, cfg.fig_ny)
     u_x = mech["u_x"](pts).reshape(cfg.fig_nx, cfg.fig_ny) * s
@@ -657,29 +675,29 @@ def save_field_figure(mech, phi_net, cfg: MechInitConfig, path: str, title: str 
     syy = mech["sigma_yy"](pts).reshape(cfg.fig_nx, cfg.fig_ny) * s
     u_mag = torch.sqrt(u_x ** 2 + u_y ** 2)
 
-    panels = [
-        (u_mag, "|u|·S"), (u_x, "u_x·S"), (u_y, "u_y·S"),
-        (sxx, "σ_xx·S"), (sxy, "σ_xy·S"), (syy, "σ_yy·S"),
+    fields = [
+        ("u_mag", u_mag, "|u|·S", pu.CMAP_SEQ, False),
+        ("u_x", u_x, "u_x·S", pu.CMAP_DIV, True),
+        ("u_y", u_y, "u_y·S", pu.CMAP_DIV, True),
+        ("sigma_xx", sxx, "σ_xx·S", pu.CMAP_DIV, True),
+        ("sigma_xy", sxy, "σ_xy·S", pu.CMAP_DIV, True),
+        ("sigma_yy", syy, "σ_yy·S", pu.CMAP_DIV, True),
     ]
-    fig, axes = plt.subplots(2, 3, figsize=(15, 5.4), constrained_layout=True)
-    for ax, (field, name) in zip(axes.flat, panels):
-        im = ax.imshow(field.T.numpy(), origin="lower",
-                       extent=[0, cfg.lx, 0, cfg.ly], aspect="auto", cmap="RdBu_r")
-        ax.set_title(name)
-        fig.colorbar(im, ax=ax, shrink=0.85)
-    if title:
-        fig.suptitle(title)
-    fig.savefig(path, dpi=110)
-    plt.close(fig)
+    X, Y = _grid_XYn(cfg)
+    block = (cfg.block_x, cfg.block_y)
+    for kind, f, name, cmap, sym in fields:
+        pu.save_field(_fig_path(cfg, kind, tag), X, Y,
+                      f.T.numpy(),   # (nx,ny) -> (ny,nx)
+                      lx=cfg.lx, ly=cfg.ly, cmap=cmap, symmetric=sym,
+                      block=block, title=f"{name}（t = {cfg.phi_t}）")
 
 
-def save_loss_figure(adam_history: list, lbfgs_history: list, cfg: MechInitConfig, path: str):
-    """损失曲线：左图 Adam 各项分量，右图 L-BFGS 训练/验证总损失。"""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6), constrained_layout=True)
-
+def save_loss_figures(adam_history: list, lbfgs_history: list, cfg: MechInitConfig):
+    """损失曲线两张单图：loss_mech_adam（Adam 各项分量）、loss_mech_lbfgs
+    （L-BFGS 训练/验证总损失）。"""
     if adam_history:
         steps = [h["step"] for h in adam_history]
+        series = []
         for key, label in [("total", "total"), ("pde", "pde"), ("cons", "cons"),
                            ("blk", "blk"), ("dir", "dir"), ("neu", "neu"),
                            ("norm", "norm"), ("ray", "ray")]:
@@ -689,29 +707,45 @@ def save_loss_figure(adam_history: list, lbfgs_history: list, cfg: MechInitConfi
                 xs = [s for s, v in zip(steps, vals) if not math.isnan(v)]
                 ys = [v for v in vals if not math.isnan(v)]
                 if xs:
-                    ax1.semilogy(xs, ys, label=label)
+                    series.append((xs, ys, label))
             else:
-                ax1.semilogy(steps, vals, label=label)
-        ax1.axvline(cfg.rayleigh_warmup, color="gray", ls="--", lw=0.8,
-                    label="ray warmup")
-    ax1.set_xlabel("Adam step")
-    ax1.set_ylabel("loss")
-    ax1.set_title("Stage A (Adam)")
-    ax1.legend(fontsize=8)
-    ax1.grid(alpha=0.3)
-
+                series.append((steps, vals, label))
+        pu.save_lines(_fig_path(cfg, "loss_mech_adam"), series, logy=True,
+                      title=f"Mech Stage A (Adam)，ray warmup = "
+                            f"{cfg.rayleigh_warmup} 步",
+                      xlabel="Adam step", ylabel="loss")
     if lbfgs_history:
         blocks = list(range(len(lbfgs_history)))
-        ax2.semilogy(blocks, [h["total"] for h in lbfgs_history], "o-", label="train")
-        ax2.semilogy(blocks, [h["val"] for h in lbfgs_history], "s-", label="val")
-    ax2.set_xlabel("L-BFGS block")
-    ax2.set_ylabel("total loss")
-    ax2.set_title("Stage B (L-BFGS)")
-    ax2.legend(fontsize=8)
-    ax2.grid(alpha=0.3)
+        pu.save_lines(_fig_path(cfg, "loss_mech_lbfgs"),
+                      [(blocks, [h["total"] for h in lbfgs_history], "train"),
+                       (blocks, [h["val"] for h in lbfgs_history], "val")],
+                      logy=True, title="Mech Stage B (L-BFGS)",
+                      xlabel="L-BFGS block", ylabel="total loss")
 
-    fig.savefig(path, dpi=110)
-    plt.close(fig)
+
+# --- 兼容包装（mech_init_ipm.py / mech_init_v2.py 等旧脚本仍在用旧签名） ---
+
+def save_field_figure(mech, phi_net, cfg: MechInitConfig, path: str, title: str = ""):
+    """旧接口兼容：path 的目录作图根、文件名词干作 tag，改写六张单图。"""
+    d = os.path.dirname(path)
+    tag = os.path.splitext(os.path.basename(path))[0]
+    old_dir, old_tag = cfg.fig_dir, cfg.fig_tag
+    try:
+        cfg.fig_dir, cfg.fig_tag = d, tag
+        save_field_figures(mech, phi_net, cfg)
+    finally:
+        cfg.fig_dir, cfg.fig_tag = old_dir, old_tag
+
+
+def save_loss_figure(adam_history: list, lbfgs_history: list, cfg: MechInitConfig, path: str):
+    """旧接口兼容：改写 loss_mech_adam.png / loss_mech_lbfgs.png 到 path 的目录。"""
+    d = os.path.dirname(path)
+    old_dir, old_tag = cfg.fig_dir, cfg.fig_tag
+    try:
+        cfg.fig_dir, cfg.fig_tag = d, ""
+        save_loss_figures(adam_history, lbfgs_history, cfg)
+    finally:
+        cfg.fig_dir, cfg.fig_tag = old_dir, old_tag
 
 
 # ---------------------------------------------------------------------------
@@ -750,9 +784,7 @@ def main(cfg: MechInitConfig | None = None):
 
     # 初始状态存图
     if not cfg.quiet_figures:
-        save_field_figure(mech, phi_net, cfg,
-                          os.path.join(cfg.fig_dir, "step000000_initial.png"),
-                          title="initial (untrained)")
+        save_field_figures(mech, phi_net, cfg, tag="initial")
 
     # Adam 点池（Sobol 内部点 + 重块邻域加密 + 边界点）
     gen = torch.Generator().manual_seed(cfg.seed + 1)
@@ -775,11 +807,8 @@ def main(cfg: MechInitConfig | None = None):
     train_lbfgs(mech, phi_net, cfg, lbfgs_history)
 
     # 收尾：损失曲线、最终状态图、保存权重、诊断
-    save_loss_figure(adam_history, lbfgs_history, cfg,
-                     os.path.join(cfg.fig_dir, "loss_history.png"))
-    save_field_figure(mech, phi_net, cfg,
-                      os.path.join(cfg.fig_dir, "final.png"),
-                      title="final (rolled back to best-val)")
+    save_loss_figures(adam_history, lbfgs_history, cfg)
+    save_field_figures(mech, phi_net, cfg)
 
     saved = []
     for name in MECH_NET_NAMES:

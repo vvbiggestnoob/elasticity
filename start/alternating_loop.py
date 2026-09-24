@@ -33,9 +33,19 @@ alternating_loop.py — 拓扑优化外层交替循环（Step A 力学重解 ↔
      FEM 对拍锚点与 area_after 算下一步的 α。四角已由 corner_freeze 硬
      非设计域冻结，原 p_cap 角部保护方案于 2026-09-18 移除。
 
-图片策略（quiet_figures=True）：子模块每步只存 vn_field / final / loss_history
-三张图到 loop_figures/iter{k:03d}_hjb|mech/；循环级只维护两张汇总图
-（history.png 收敛曲线、zero_level_sets.png 零水平集叠加），每次迭代重绘覆盖。
+图片策略（quiet_figures=True，2026-09-24 起统一为 plot_utils 风格：一图一文件、
+黑白为主、硬块红框、四角不标记）：子模块按类型分文件夹存单面板图到
+loop_figures/{kind}/iter{k:03d}.png（HJB 侧：vn / vn_boundary / energy / kinetic /
+phi / geometry / delta_S / loss_hjb_adam / loss_hjb_lbfgs；力学侧：u_mag / u_x / u_y /
+sigma_xx / sigma_xy / sigma_yy / loss_mech_adam / loss_mech_lbfgs）；循环级汇总图在
+loop_figures/history/（rayleigh.png、area.png、F.png、pressure.png、
+zero_level_sets.png），每 summary_fig_every 步（默认 10）与末步重绘覆盖。
+每步的 Rayleigh 商与面积同时记入 loop_history.json 与 weights/
+rayleigh_area_history.csv。
+
+起跑方式：k_start = 1（默认）= 从第 0 步几何（phi_init.pt + 已训练的初始力学
+*_init.pt）起跑，初始化不重做；k_start > 1 = 从 iter{k_start-1} 检查点续跑
+（首步 α 与 ω² 锚点取自 hjb_state_iter{k_start-1}.json）。
 
 加速机制（利用小 dt 下每步变化小的特性）：
   1. 预测-校正分裂：每 full_step_every 步跑一次完整四损失校正步，其余为廉价
@@ -71,7 +81,6 @@ import matplotlib
 matplotlib.use("Agg")  # 无界面后端，只保存图片
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
 import torch
 
 # 所有相对路径相对本脚本所在目录解析，从任意工作目录运行均可
@@ -80,7 +89,10 @@ sys.path.insert(0, SCRIPT_DIR)
 
 import mech_init
 import hjb_step_eik as hjb_mod  # 换回原始版本：import hjb_step as hjb_mod
+import plot_utils as pu
 from networks import NetworkConfig, build_sdf_network, MECH_NET_NAMES
+
+pu.setup_style()
 
 
 def _resolve(path: str) -> str:
@@ -98,7 +110,10 @@ class LoopConfig:
     ly: float = 0.5
 
     # 循环规模与演化参数
-    n_iter: int = 1000               # 交替迭代次数，总伪时间 T = n_iter·dt
+    n_iter: int = 1000               # 交替迭代次数（末步编号），总伪时间 T = n_iter·dt
+    k_start: int = 1                # 起始迭代号：1 = 从第 0 步几何（phi_init + 已训练
+                                    #  的初始力学 *_init）起跑，初始化不重做；
+                                    #  >1 = 从 iter{k_start-1} 检查点续跑
     dt: float = 0.005               # 每步伪时间步长（CFL：|V_n|·dt ≲ β=0.01 → |V_n| ≲ 2；
                                     #  罚压力峰值 ≈ √(τ·ω²·α_max)，超限需调小 dt 或 α_max）
     alpha: float = 1.0             # 固定罚参数（仅 alpha_adaptive=False 时生效；
@@ -167,6 +182,10 @@ class LoopConfig:
     mech_init_suffix: str = "_init.pt"      # mech_init.py 的产物
     loop_fig_dir: str = "loop_figures"
     history_out: str = "weights/loop_history.json"
+    # 循环级汇总图（history/ 下 rayleigh / area / F / pressure / zero_level_sets）
+    # 每 summary_fig_every 步与末步重绘覆盖；Rayleigh 商与面积每步另记 CSV
+    summary_fig_every: int = 10
+    rayleigh_area_csv: str = "weights/rayleigh_area_history.csv"
     seed: int = 20260909
 
     dtype: torch.dtype = torch.float64
@@ -218,7 +237,9 @@ def run_hjb_step(k: int, cfg: LoopConfig, cheap: bool, alpha: float) -> Dict:
         mech_suffix=mech_suffix(k - 1, cfg),
         phi_out=_resolve(os.path.join(cfg.weights_dir, phi_name(k, cfg))),
         state_out=state_out,
-        fig_dir=_resolve(os.path.join(cfg.loop_fig_dir, f"iter{k:03d}_hjb")),
+        # 出图：loop_fig_dir 根目录 + iter 标签 → {kind}/iter{k:03d}.png 分文件夹
+        fig_dir=_resolve(cfg.loop_fig_dir),
+        fig_tag=f"iter{k:03d}",
         fem_check=cfg.fem_check,
         quiet_figures=True,
         # 角部硬非设计域（0 = 关闭）
@@ -266,7 +287,9 @@ def run_mech_solve(k: int, cfg: LoopConfig, omega2_fem: float):
         adam_steps=cfg.mech_adam_steps,
         lbfgs_blocks=cfg.mech_lbfgs_blocks,
         weights_dir=_resolve(cfg.weights_dir),
-        fig_dir=_resolve(os.path.join(cfg.loop_fig_dir, f"iter{k:03d}_mech")),
+        # 出图：loop_fig_dir 根目录 + iter 标签 → {kind}/iter{k:03d}.png 分文件夹
+        fig_dir=_resolve(cfg.loop_fig_dir),
+        fig_tag=f"iter{k:03d}",
         quiet_figures=True,
         # Adam 固定步数（不做停滞检测）；L-BFGS 早停看 train 逐块相对下降，
         # 连续 5 块 < early_stop_rtol 即退出，块数只作安全上限（mech_extra 可覆盖）
@@ -359,57 +382,81 @@ def max_dphi(k: int, cfg: LoopConfig) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 循环级汇总图（每次迭代重绘覆盖，只此两张）
+# 循环级汇总图与记录（每 summary_fig_every 步与末步重绘覆盖；CSV 每步重写）
 # ---------------------------------------------------------------------------
 
-def save_history_figure(history: List[Dict], cfg: LoopConfig):
-    """四联收敛曲线：F、ω²、面积、罚压力 p vs 迭代步。"""
-    iters = [h["iter"] for h in history]
-    fig, axes = plt.subplots(1, 4, figsize=(20, 4.2), constrained_layout=True)
+def _hist_path(cfg: LoopConfig, name: str) -> str:
+    return _resolve(os.path.join(cfg.loop_fig_dir, "history", name))
 
-    axes[0].plot(iters, [h["F_before"] for h in history], "o--", color="gray",
-                 label="F before (step start)")
-    axes[0].plot(iters, [h["F_after"] for h in history], "o-", color="tab:blue",
-                 label="F after (HJB step)")
-    axes[0].set_title("objective F = −ω² + (1/2α)(∫S−C)²")
-    axes[0].legend(fontsize=8)
 
-    om_fem = [h["omega2_fem_after"] for h in history]
-    xs_fem = [i for i, v in zip(iters, om_fem) if v is not None]
-    ys_fem = [v for v in om_fem if v is not None]
+def _series(history: List[Dict], key: str):
+    """从 history 提取 (iters, vals)，跳过 None（如 iter-0 记录缺 F 等）。"""
+    pairs = [(h["iter"], h[key]) for h in history if h.get(key) is not None]
+    return ([p[0] for p in pairs], [p[1] for p in pairs]) if pairs else ([], [])
+
+
+def save_history_figures(history: List[Dict], cfg: LoopConfig):
+    """收敛曲线四张单图（history/ 下）：rayleigh.png、area.png、F.png、
+    pressure.png。黑白风格；Rayleigh 商与面积的演变即用户要求每 10 步
+    重绘的两张。"""
+    # ω²（Rayleigh 商）演变：FEM 对拍值 + 冻结力学 Rayleigh 商
+    xs_fem, ys_fem = _series(history, "omega2_fem_after")
+    xs_ray, ys_ray = _series(history, "omega2_rayleigh_after")
+    series = []
     if xs_fem:
-        axes[1].plot(xs_fem, ys_fem, "s-", color="tab:red", label="ω² FEM")
-    axes[1].plot(iters, [h["omega2_rayleigh_after"] for h in history], "o--",
-                 color="tab:orange", label="ω² Rayleigh (frozen mech)")
-    axes[1].set_title("ω² on evolved geometry")
-    axes[1].legend(fontsize=8)
+        series.append((xs_fem, ys_fem, "ω² FEM"))
+    if xs_ray:
+        series.append((xs_ray, ys_ray, "ω² Rayleigh (frozen mech)"))
+    if series:
+        pu.save_lines(_hist_path(cfg, "rayleigh.png"), series,
+                      title="Rayleigh 商演变（演化后几何）",
+                      xlabel="iteration", ylabel="ω²")
 
-    axes[2].plot(iters, [h["area_after"] for h in history], "o-", color="tab:green")
-    axes[2].axhline(cfg.v_target, color="k", ls="--", lw=1, label=f"C = {cfg.v_target}")
-    axes[2].set_title("area ∫S dx")
-    axes[2].legend(fontsize=8)
+    # 面积演变（含目标线）
+    xs_a, ys_a = _series(history, "area_after")
+    if xs_a:
+        pu.save_lines(_hist_path(cfg, "area.png"),
+                      [(xs_a, ys_a, "∫S dx")],
+                      title="面积演变", xlabel="iteration", ylabel="area",
+                      hlines=[(cfg.v_target, f"C = {cfg.v_target}")])
+
+    # 目标函数 F
+    xs_b, ys_b = _series(history, "F_before")
+    xs_f, ys_f = _series(history, "F_after")
+    if xs_f:
+        pu.save_lines(_hist_path(cfg, "F.png"),
+                      [(xs_b, ys_b, "F before (step start)"),
+                       (xs_f, ys_f, "F after (HJB step)")],
+                      title="objective F = −ω² + (1/2α)(∫S−C)²",
+                      xlabel="iteration", ylabel="F")
 
     # 罚压力 p = |ΔV|/α 轨迹（文档公式下 p = min(τ·ω²/|ΔV|, α_max·|ΔV|)）
-    p_used = [h.get("p_used") for h in history]
-    xs_p = [i for i, v in zip(iters, p_used) if v is not None]
-    ys_p = [v for v in p_used if v is not None]
+    xs_p, ys_p = _series(history, "p_used")
     if xs_p:
-        axes[3].plot(xs_p, ys_p, "o-", color="tab:purple", label="p = |ΔV|/α")
-    axes[3].set_title("penalty pressure p = |ΔV|/α")
-    axes[3].legend(fontsize=8)
+        pu.save_lines(_hist_path(cfg, "pressure.png"),
+                      [(xs_p, ys_p, "p = |ΔV|/α")],
+                      title="penalty pressure p = |ΔV|/α",
+                      xlabel="iteration", ylabel="p")
 
-    for ax in axes:
-        ax.set_xlabel("iteration")
-        ax.grid(alpha=0.3)
-    path = _resolve(os.path.join(cfg.loop_fig_dir, "history.png"))
+
+def save_rayleigh_area_csv(history: List[Dict], cfg: LoopConfig):
+    """每步的 Rayleigh 商与面积记录（重写整个 CSV，量小随写随新）。"""
+    path = _resolve(cfg.rayleigh_area_csv)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
+    keys = ("omega2_rayleigh_before", "omega2_rayleigh_after",
+            "omega2_fem_after", "area_before", "area_after")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("iter,t," + ",".join(keys) + "\n")
+        for h in history:
+            vals = ["" if h.get(k) is None else f"{h[k]:.10g}" for k in keys]
+            f.write(f"{h['iter']},{h.get('t', h['iter'] * cfg.dt):.10g},"
+                    + ",".join(vals) + "\n")
 
 
 @torch.no_grad()
 def save_zero_level_figure(k_max: int, cfg: LoopConfig):
-    """零水平集叠加图：几何 0..k_max 的 φ=0 等值线（蓝=初始，红=最新）。"""
+    """零水平集叠加图：几何 0..k_max 的 φ=0 等值线（浅灰=初始，黑=最新），
+    硬块红框标记，四角固定区不标记。"""
     net_cfg = NetworkConfig(lx=cfg.lx, ly=cfg.ly, dtype=cfg.dtype)
     phi = build_sdf_network(net_cfg)
     xs = torch.linspace(0.0, cfg.lx, 321, dtype=cfg.dtype)
@@ -418,34 +465,35 @@ def save_zero_level_figure(k_max: int, cfg: LoopConfig):
     grid = torch.stack([X.reshape(-1), Y.reshape(-1)], dim=1)
     tt = torch.empty(grid.shape[0], 1, dtype=cfg.dtype)
 
-    fig, ax = plt.subplots(figsize=(11.5, 4.2), constrained_layout=True)
-    cmap = plt.get_cmap("coolwarm")
+    fig, ax = plt.subplots(figsize=(10.5, 10.5 * cfg.ly / cfg.lx + 0.6),
+                           constrained_layout=True)
     handles = []
     for j in range(0, k_max + 1):
         path = _resolve(os.path.join(cfg.weights_dir, phi_name(j, cfg)))
+        if not os.path.exists(path):
+            continue  # 续跑/独立目录下早期权重可能不在，跳过
         phi.load_state_dict(torch.load(path, weights_only=True))
         tt.fill_(j * cfg.dt)  # 变量传递约定 1：几何 j 在其窗口右端切片
         z = phi(torch.cat([grid, tt], dim=1)).reshape(X.shape).numpy()
-        color = cmap(j / max(k_max, 1))
+        gray = 0.75 * (1.0 - j / max(k_max, 1))   # 初始浅灰 → 最新黑
+        color = str(gray)
         ax.contour(X.numpy(), Y.numpy(), z, levels=[0.0], colors=[color],
                    linewidths=1.3)
         if k_max <= 12 or j in (0, k_max):
             handles.append(Line2D([0], [0], color=color, lw=1.3,
                                   label=f"iter {j} (t={j * cfg.dt:.3g})"))
 
-    # 重块区域（不可优化）与域边界
+    # 硬块区域（不可优化）红框标记；四角固定区不标记
     mcfg0 = mech_init.MechInitConfig()
-    bx, by = mcfg0.block_x, mcfg0.block_y
-    ax.add_patch(Rectangle((bx[0], by[0]), bx[1] - bx[0], by[1] - by[0],
-                           fill=False, ec="k", ls="--", lw=1.2))
+    pu.add_block_box(ax, mcfg0.block_x, mcfg0.block_y)
     ax.set_xlim(0, cfg.lx)
     ax.set_ylim(0, cfg.ly)
     ax.set_aspect("equal")
     ax.set_title(f"zero level set evolution (dt = {cfg.dt}, T = {k_max * cfg.dt:.3g})")
     ax.legend(handles=handles, loc="upper right", fontsize=8)
-    out = _resolve(os.path.join(cfg.loop_fig_dir, "zero_level_sets.png"))
+    out = _hist_path(cfg, "zero_level_sets.png")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    fig.savefig(out, dpi=120)
+    fig.savefig(out, dpi=150)
     plt.close(fig)
 
 
@@ -458,34 +506,56 @@ def main(cfg: Optional[LoopConfig] = None):
     cfg.weights_dir = _resolve(cfg.weights_dir)
     cfg.loop_fig_dir = _resolve(cfg.loop_fig_dir)
     cfg.history_out = _resolve(cfg.history_out)
+    cfg.rayleigh_area_csv = _resolve(cfg.rayleigh_area_csv)
     os.makedirs(cfg.weights_dir, exist_ok=True)
     os.makedirs(cfg.loop_fig_dir, exist_ok=True)
 
-    # 前置检查：初始 SDF 与初始力学权重必须已存在（sdf_init.py / mech_init.py 的产物）
-    need = [cfg.phi_init_name] + [n + cfg.mech_init_suffix for n in MECH_NET_NAMES]
-    missing = [p for p in need
-               if not os.path.exists(os.path.join(cfg.weights_dir, p))]
-    if missing:
-        raise FileNotFoundError(
-            f"缺少初始权重 {missing}（目录 {cfg.weights_dir}）。"
-            "请先运行 sdf_init.py 与 mech_init.py。")
+    # 前置检查与首步锚点：k_start = 1 用初始权重（sdf_init.py / mech_init.py
+    # 的产物，初始化不重做）；k_start > 1 用 iter{k_start-1} 检查点续跑
+    if cfg.k_start <= 1:
+        need = [cfg.phi_init_name] + [n + cfg.mech_init_suffix
+                                      for n in MECH_NET_NAMES]
+        missing = [p for p in need
+                   if not os.path.exists(os.path.join(cfg.weights_dir, p))]
+        if missing:
+            raise FileNotFoundError(
+                f"缺少初始权重 {missing}（目录 {cfg.weights_dir}）。"
+                "请先运行 sdf_init.py 与 mech_init.py（或从已有实验目录复制 "
+                "phi_init.pt 与 *_init.pt）。")
+        # 初始几何的 ω² 锚点 = mech_init 默认的 FEM 实测值（全材料+重块）
+        omega2_anchor = mech_init.MechInitConfig().omega2_fem
+        area_prev = initial_area(cfg)
+    else:
+        k0 = cfg.k_start - 1
+        need = [phi_name(k0, cfg)]
+        need += [n + mech_suffix(k0, cfg) for n in MECH_NET_NAMES]
+        need += [f"hjb_state_iter{k0}.json"]
+        missing = [p for p in need
+                   if not os.path.exists(os.path.join(cfg.weights_dir, p))]
+        if missing:
+            raise FileNotFoundError(
+                f"续跑检查点缺文件 {missing}（目录 {cfg.weights_dir}）。")
+        with open(os.path.join(cfg.weights_dir, f"hjb_state_iter{k0}.json"),
+                  "r", encoding="utf-8") as f:
+            prev = json.load(f)
+        area_prev = float(prev["area_after"])
+        omega2_anchor = float(prev.get("omega2_fem_after")
+                              or prev["omega2_after_rayleigh_frozen_mech"])
 
-    # 初始几何的 ω² 锚点 = mech_init 默认的 FEM 实测值（全材料+重块）
-    omega2_anchor = mech_init.MechInitConfig().omega2_fem
-    # 罚参数：与 towangbt 一致，第 1 步起即用公式（以初始几何面积与初始 ω² 锚点
+    # 罚参数：与 towangbt 一致，首步起即用公式（以起跑几何面积与 ω² 锚点
     # 计算）；cfg.alpha 仅在 alpha_adaptive=False 时作为固定值使用
     alpha_cur = cfg.alpha
     if cfg.alpha_adaptive:
-        area0 = initial_area(cfg)
-        alpha_cur, p0 = update_alpha(area0, omega2_anchor, cfg)
+        alpha_cur, p0 = update_alpha(area_prev, omega2_anchor, cfg)
 
     print("=" * 72)
-    print(f"交替循环：n_iter = {cfg.n_iter}，dt = {cfg.dt}，"
+    print(f"交替循环：迭代 {cfg.k_start} → {cfg.n_iter}，dt = {cfg.dt}，"
           f"总伪时间 T = {cfg.n_iter * cfg.dt}，C = {cfg.v_target}")
     if cfg.alpha_adaptive:
         print(f"罚参数：Step D 自适应，1/α = min(τ·ω²/(ΔV)², α_max)，"
               f"τ = {cfg.tau}，α_max = {cfg.alpha_max:g} | "
-              f"第 1 步：ΔV = {area0 - cfg.v_target:+.4f}，ω² = {omega2_anchor:.4f} "
+              f"首步：ΔV = {area_prev - cfg.v_target:+.4f}，"
+              f"ω² = {omega2_anchor:.4f} "
               f"→ α = {alpha_cur:.4g}（罚压力 p = {p0:.4f}）")
     else:
         print(f"罚参数：固定 α = {cfg.alpha}")
@@ -494,14 +564,26 @@ def main(cfg: Optional[LoopConfig] = None):
           f"每 {cfg.full_step_every} 步一次完整校正")
     print(f"力学重解：Adam {cfg.mech_adam_steps} + L-BFGS {cfg.mech_lbfgs_blocks} 块"
           f"（热启动，max|Δφ| < {cfg.mech_skip_tol} 时跳步）")
-    print(f"HJB 模块：{hjb_mod.__name__} | FEM 对拍：{cfg.fem_check}")
+    print(f"HJB 模块：{hjb_mod.__name__} | FEM 对拍：{cfg.fem_check} | "
+          f"汇总图每 {cfg.summary_fig_every} 步重绘")
     print("=" * 72)
 
     history: List[Dict] = []
-    force_full = True   # 第 1 步必为完整校正步
+    if cfg.k_start <= 1:
+        # 第 0 步记录：初始几何的面积与 ω² 锚点（演变图从第 0 步画起）
+        history.append({
+            "iter": 0, "t": 0.0, "cheap": None, "alpha_used": None,
+            "p_used": None, "max_dphi": None, "mech_skipped": None,
+            "F_before": None, "F_after": None,
+            "area_before": None, "area_after": area_prev,
+            "omega2_rayleigh_before": None, "omega2_rayleigh_after": None,
+            "omega2_fem_after": omega2_anchor,
+            "omega2_anchor_used": omega2_anchor,
+        })
+    force_full = True   # 首步必为完整校正步
     t_start = time.time()
 
-    for k in range(1, cfg.n_iter + 1):
+    for k in range(cfg.k_start, cfg.n_iter + 1):
         # 加速机制 1：完整校正步 / 廉价预测步
         cheap = not force_full and (k % cfg.full_step_every != 0)
         force_full = False
@@ -580,14 +662,17 @@ def main(cfg: Optional[LoopConfig] = None):
         }
         history.append(record)
 
-        # 每步落盘（崩溃不丢历史）+ 两张汇总图重绘
+        # 每步落盘（崩溃不丢历史）+ Rayleigh 商/面积 CSV；汇总图每
+        # summary_fig_every 步与末步重绘（零水平集叠加图 O(k) 开销，不宜每步）
         cfg_dict = dataclasses.asdict(cfg)
         cfg_dict["dtype"] = str(cfg.dtype)
         with open(cfg.history_out, "w", encoding="utf-8") as f:
             json.dump({"config": cfg_dict, "history": history}, f,
                       ensure_ascii=False, indent=2)
-        save_history_figure(history, cfg)
-        save_zero_level_figure(k, cfg)
+        save_rayleigh_area_csv(history, cfg)
+        if k % cfg.summary_fig_every == 0 or k == cfg.n_iter:
+            save_history_figures(history, cfg)
+            save_zero_level_figure(k, cfg)
 
         skip_str = "力学跳步" if skip_mech else f"力学 {mech_wall:.0f}s"
         print(f"[迭代 {k} 完成]（{mode}）F {record['F_before']:.6f} → "
@@ -597,11 +682,14 @@ def main(cfg: Optional[LoopConfig] = None):
               f"累计 {time.time() - t_start:.0f}s")
 
     print("\n" + "=" * 72)
-    print(f"[完成] {cfg.n_iter} 次交替迭代，总用时 {time.time() - t_start:.0f}s")
+    print(f"[完成] 迭代 {cfg.k_start} → {cfg.n_iter}，"
+          f"总用时 {time.time() - t_start:.0f}s")
     print(f"  最终 SDF：{os.path.join(cfg.weights_dir, phi_name(cfg.n_iter, cfg))}")
     print(f"  最终力学：{cfg.weights_dir}/*{mech_suffix(cfg.n_iter, cfg)}")
     print(f"  历史记录：{cfg.history_out}")
-    print(f"  汇总图：{cfg.loop_fig_dir}/history.png, zero_level_sets.png")
+    print(f"  Rayleigh/面积 CSV：{cfg.rayleigh_area_csv}")
+    print(f"  汇总图：{cfg.loop_fig_dir}/history/"
+          "（rayleigh.png、area.png、F.png、pressure.png、zero_level_sets.png）")
     print("=" * 72)
     return history
 
